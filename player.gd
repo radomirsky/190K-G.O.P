@@ -210,10 +210,10 @@ func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
 	query.exclude = [get_rid()]
-	var hit := space.intersect_ray(query)
-	if hit.is_empty():
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty() or not hit.has("collider"):
 		return null
-	var col := hit.get("collider")
+	var col: Object = hit["collider"]
 	if col is RigidBody3D and col.is_in_group("throwable"):
 		return col as RigidBody3D
 	return null
