@@ -84,7 +84,7 @@ func _shatter_and_free() -> void:
 	var child_n: int = clampi(maxi(2, n - 1), 2, 8)
 	if sz < 0.22:
 		child_n = clampi(maxi(2, n - 2), 2, 6)
-	var mass_scale := powf(next_sz / 0.38, 3.0)
+	var mass_scale := pow(next_sz / 0.38, 3.0)
 	for i in n:
 		var shard := RigidBody3D.new()
 		shard.set_script(scr)
