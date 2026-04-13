@@ -301,9 +301,8 @@ func _try_glue_throwable_cubes() -> void:
 	joint.global_position = (a.global_position + b.global_position) * 0.5
 	joint.node_a = scene.get_path_to(a)
 	joint.node_b = scene.get_path_to(b)
-	joint.angular_limit_enabled = true
-	joint.angular_limit_lower = deg_to_rad(-2.0)
-	joint.angular_limit_upper = deg_to_rad(2.0)
+	joint.set_param(PinJoint3D.PARAM_BIAS, 0.65)
+	joint.set_param(PinJoint3D.PARAM_DAMPING, 1.15)
 
 
 func _apply_body_pushes(move_velocity: Vector3) -> void:
