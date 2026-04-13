@@ -1,12 +1,41 @@
-[gd_scene format=3]
+[gd_scene load_steps=5 format=3]
 
-[node name="Main" type="Node"]
+[ext_resource type="Script" path="res://fly_camera.gd" id="1_fly"]
 
-[node name="Label" type="Label" parent="."]
-layout_mode = 0
-offset_left = 48.0
-offset_top = 48.0
-offset_right = 520.0
-offset_bottom = 120.0
-theme_override_font_sizes/font_size = 28
-text = "Минимальная база Godot — откройте проект в редакторе 4.x"
+[sub_resource type="BoxMesh" id="BoxMesh_cube"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cube"]
+albedo_color = Color(0.45, 0.65, 0.95, 1)
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 1
+background_color = Color(0.1, 0.1, 0.12, 1)
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, -0.75, 0.433013, 2, 6, 3)
+light_energy = 1.15
+shadow_enabled = true
+
+[node name="FillLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2.5, 2)
+light_color = Color(0.85, 0.9, 1, 1)
+light_energy = 0.35
+shadow_enabled = false
+
+[node name="Cube" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_cube")
+
+[node name="Player" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 1.4, 3.8)
+script = ExtResource("1_fly")
+
+[node name="Camera3D" type="Camera3D" parent="Player"]
+current = true
+fov = 65.0
