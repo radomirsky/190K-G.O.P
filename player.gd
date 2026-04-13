@@ -4,7 +4,9 @@ extends CharacterBody3D
 @export var jump_velocity: float = 4.6
 @export var mouse_sensitivity: float = 0.0025
 @export var pickup_distance: float = 2.8
-@export var throw_speed: float = 16.0
+@export var throw_speed_min: float = 3.5
+@export var throw_speed_max: float = 22.0
+@export var throw_charge_full_time: float = 0.85
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -14,6 +16,7 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 var _held: RigidBody3D = null
 var _jump_requested: bool = false
+var _throw_press_usec: int = -1
 
 
 func _ready() -> void:
@@ -41,13 +44,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			PI / 2.0 - 0.02
 		)
 
-	if event is InputEventMouseButton:
-		if (
-			event.button_index == MOUSE_BUTTON_LEFT
-			and event.pressed
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-		):
-			_throw_held()
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	):
+		if event.pressed:
+			if _held:
+				_throw_press_usec = Time.get_ticks_usec()
+		else:
+			if _held and _throw_press_usec >= 0:
+				_throw_held_charged()
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -112,6 +119,7 @@ func _try_pickup() -> void:
 	if collider is RigidBody3D and collider.is_in_group("throwable"):
 		_held = collider as RigidBody3D
 		_held.freeze = true
+		_throw_press_usec = -1
 
 
 func _release_held() -> void:
@@ -119,12 +127,19 @@ func _release_held() -> void:
 		return
 	_held.freeze = false
 	_held = null
+	_throw_press_usec = -1
 
 
-func _throw_held() -> void:
+func _throw_held_charged() -> void:
 	if not _held:
+		_throw_press_usec = -1
 		return
+	var elapsed_sec := (Time.get_ticks_usec() - _throw_press_usec) / 1_000_000.0
+	_throw_press_usec = -1
+	elapsed_sec = maxf(elapsed_sec, 0.0)
+	var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
+	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
 	var impulse_dir := -_camera.global_transform.basis.z.normalized()
 	_held.freeze = false
-	_held.linear_velocity = impulse_dir * throw_speed
+	_held.linear_velocity = impulse_dir * speed
 	_held = null
