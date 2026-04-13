@@ -11,6 +11,8 @@ const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 @export var throw_charge_full_time: float = 0.85
 @export var body_push_multiplier: float = 1.15
 @export var cube_spawn_distance: float = 3.0
+@export var glue_look_distance: float = 4.0
+@export var glue_pair_max_distance: float = 1.45
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -83,6 +85,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
 			_unlock_cubes_world()
+		if (
+			event.keycode == KEY_C
+			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		):
+			_try_glue_throwable_cubes()
 		if event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			if _held:
 				_release_held()
@@ -195,6 +203,82 @@ func _apply_throwables_world_lock() -> void:
 			rb.angular_velocity = Vector3.ZERO
 
 
+func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:
+	var space := get_world_3d().direct_space_state
+	var from := _camera.global_position
+	var to := from - _camera.global_transform.basis.z * max_dist
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.exclude = [get_rid()]
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return null
+	var col := hit.get("collider")
+	if col is RigidBody3D and col.is_in_group("throwable"):
+		return col as RigidBody3D
+	return null
+
+
+func _find_nearest_throwable(from_rb: RigidBody3D, max_dist: float) -> RigidBody3D:
+	var best: RigidBody3D = null
+	var best_d2 := max_dist * max_dist
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if not node is RigidBody3D:
+			continue
+		var rb := node as RigidBody3D
+		if rb == from_rb or rb == _held:
+			continue
+		var d2 := from_rb.global_position.distance_squared_to(rb.global_position)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = rb
+	return best
+
+
+func _glue_joint_pair_exists(scene: Node, a: RigidBody3D, b: RigidBody3D) -> bool:
+	var pa := scene.get_path_to(a)
+	var pb := scene.get_path_to(b)
+	for child in scene.get_children():
+		if not child is PinJoint3D:
+			continue
+		var j := child as PinJoint3D
+		var ja := j.node_a
+		var jb := j.node_b
+		if (ja == pa and jb == pb) or (ja == pb and jb == pa):
+			return true
+	return false
+
+
+func _try_glue_throwable_cubes() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var a := _raycast_aimed_throwable(glue_look_distance)
+	if a == null or a == _held:
+		return
+	var b := _find_nearest_throwable(a, glue_pair_max_distance)
+	if b == null:
+		return
+	if _glue_joint_pair_exists(scene, a, b):
+		return
+	_unlock_cubes_world()
+	a.freeze = false
+	b.freeze = false
+	a.linear_velocity = Vector3.ZERO
+	b.linear_velocity = Vector3.ZERO
+	a.angular_velocity = Vector3.ZERO
+	b.angular_velocity = Vector3.ZERO
+	var joint := PinJoint3D.new()
+	joint.name = "CubeGlue_%s" % str(Time.get_ticks_msec())
+	scene.add_child(joint)
+	joint.global_position = (a.global_position + b.global_position) * 0.5
+	joint.node_a = scene.get_path_to(a)
+	joint.node_b = scene.get_path_to(b)
+	joint.angular_limit_enabled = true
+	joint.angular_limit_lower = deg_to_rad(-2.0)
+	joint.angular_limit_upper = deg_to_rad(2.0)
+
+
 func _apply_body_pushes(move_velocity: Vector3) -> void:
 	var v_h := Vector3(move_velocity.x, 0.0, move_velocity.z)
 	if v_h.length_squared() < 0.0001:
@@ -219,24 +303,16 @@ func _apply_body_pushes(move_velocity: Vector3) -> void:
 
 
 func _try_pickup() -> void:
-	var space := get_world_3d().direct_space_state
-	var from := _camera.global_position
-	var to := from - _camera.global_transform.basis.z * pickup_distance
-	var query := PhysicsRayQueryParameters3D.create(from, to)
-	query.collide_with_areas = false
-	query.exclude = [get_rid()]
-	var hit := space.intersect_ray(query)
-	if hit.is_empty():
+	var collider := _raycast_aimed_throwable(pickup_distance)
+	if collider == null:
 		return
-	var collider: Object = hit.get("collider")
-	if collider is RigidBody3D and collider.is_in_group("throwable"):
-		_held = collider as RigidBody3D
-		_held_saved_collision_layer = _held.collision_layer
-		_held_saved_collision_mask = _held.collision_mask
-		_held.collision_layer = 0
-		_held.collision_mask = 0
-		_held.freeze = true
-		_throw_press_usec = -1
+	_held = collider
+	_held_saved_collision_layer = _held.collision_layer
+	_held_saved_collision_mask = _held.collision_mask
+	_held.collision_layer = 0
+	_held.collision_mask = 0
+	_held.freeze = true
+	_throw_press_usec = -1
 
 
 func _release_held() -> void:
