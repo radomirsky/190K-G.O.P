@@ -21,6 +21,7 @@ const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 @export var aim_ray_length: float = 48.0
 @export var look_key_speed: float = 1.85
 @export_range(0.0, 48.0, 0.25) var look_smoothing: float = 14.0
+@export_range(40.0, 120.0, 0.5) var camera_fov: float = 65.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -40,6 +41,8 @@ var _look_pitch_target: float = 0.0
 
 
 func _ready() -> void:
+	if _camera:
+		_camera.fov = camera_fov
 	_want_mouse_captured = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var win := get_window()
