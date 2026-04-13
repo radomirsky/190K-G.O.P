@@ -27,10 +27,29 @@ var _standing_on_throwable: bool = false
 var _held_saved_collision_layer: int = 1
 var _held_saved_collision_mask: int = 1
 var _cubes_world_locked: bool = false
+var _want_mouse_captured: bool = true
 
 
 func _ready() -> void:
+	_want_mouse_captured = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	var win := get_window()
+	if win:
+		var cb := Callable(self, "_restore_mouse_capture_after_focus")
+		if not win.focus_entered.is_connected(cb):
+			win.focus_entered.connect(cb)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		call_deferred("_restore_mouse_capture_after_focus")
+
+
+func _restore_mouse_capture_after_focus() -> void:
+	if not is_inside_tree():
+		return
+	if _want_mouse_captured:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _input(event: InputEvent) -> void:
@@ -41,8 +60,10 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			_want_mouse_captured = false
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
+			_want_mouse_captured = true
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
