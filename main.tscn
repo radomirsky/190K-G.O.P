@@ -1,6 +1,7 @@
-[gd_scene load_steps=12 format=3 uid="uid://cfmf2gvwovbox"]
+[gd_scene load_steps=13 format=3 uid="uid://cfmf2gvwovbox"]
 
 [ext_resource type="Script" uid="uid://ccxh1c7bxjs0h" path="res://player.gd" id="1_player"]
+[ext_resource type="Shader" path="res://floor_checker.gdshader" id="2_floor_shader"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -9,8 +10,13 @@ background_color = Color(0.1, 0.1, 0.12, 1)
 [sub_resource type="BoxMesh" id="BoxMesh_floor"]
 size = Vector3(120, 0.25, 120)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
-albedo_color = Color(0.34, 0.35, 0.38, 1)
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_floor"]
+render_priority = 0
+shader = ExtResource("2_floor_shader")
+shader_parameter/cell_size = 4.0
+shader_parameter/color_dark = Color(0.14, 0.14, 0.16, 1)
+shader_parameter/color_light = Color(0.86, 0.86, 0.9, 1)
+shader_parameter/roughness = 0.92
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
 size = Vector3(120, 0.25, 120)
@@ -55,7 +61,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.125, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=917887440]
 mesh = SubResource("BoxMesh_floor")
-surface_material_override/0 = SubResource("StandardMaterial3D_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_floor")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=887709493]
 shape = SubResource("BoxShape3D_floor")
