@@ -15,8 +15,9 @@ size = Vector3(1, 1, 1)
 mass = 0.85
 continuous_cd = true
 script = ExtResource("1_throw_break")
-shatter_piece_count = 3
-min_shard_size = 0.13
+shatter_piece_count = 2
+min_shard_size = 0.17
+final_crumb_count = 1
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("BoxMesh_cube")

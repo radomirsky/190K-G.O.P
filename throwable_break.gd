@@ -5,6 +5,7 @@ extends RigidBody3D
 @export var shatter_shard_size: float = 0.38
 @export var shatter_outward_impulse: float = 5.5
 @export var min_shard_size: float = 0.11
+@export_range(1, 2, 1) var final_crumb_count: int = 2
 
 func _ready() -> void:
 	contact_monitor = true
@@ -75,7 +76,7 @@ func _spawn_final_crumbs() -> void:
 	var basis := global_transform.basis
 	var sz := maxf(shatter_shard_size * 0.55, 0.055)
 	var mat_col := Color(0.42, 0.62, 0.92, 1.0)
-	for i in 2:
+	for i in final_crumb_count:
 		var crumb := RigidBody3D.new()
 		crumb.name = "BrickCrumb_%d_%d" % [get_instance_id(), i]
 		crumb.mass = 0.04
@@ -133,6 +134,7 @@ func _shatter_and_free() -> void:
 		shard.shatter_shard_size = next_sz
 		shard.shatter_piece_count = child_n
 		shard.min_shard_size = min_shard_size
+		shard.final_crumb_count = final_crumb_count
 		shard.destroy_min_relative_speed = destroy_min_relative_speed
 		shard.shatter_outward_impulse = shatter_outward_impulse * 0.9
 		shard.mass = clampf(0.11 * mass_scale, 0.03, 0.85)
