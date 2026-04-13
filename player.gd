@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
+const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
 const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 
@@ -13,6 +14,7 @@ const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 @export var throw_charge_full_time: float = 0.85
 @export var body_push_multiplier: float = 1.15
 @export var cube_spawn_distance: float = 3.0
+@export var pyramid_spawn_height: float = 0.575
 @export var glue_look_distance: float = 4.0
 @export var glue_pair_max_distance: float = 1.45
 
@@ -98,6 +100,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			_spawn_throwable_cube()
 			get_viewport().set_input_as_handled()
 		elif (
+			event.keycode == KEY_R
+			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		):
+			_spawn_throwable_pyramid()
+			get_viewport().set_input_as_handled()
+		elif (
 			event.keycode == KEY_Z
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
@@ -174,8 +183,11 @@ func _get_throwable_mesh(rb: RigidBody3D) -> MeshInstance3D:
 
 
 func _ensure_throwable_material(mesh: MeshInstance3D) -> StandardMaterial3D:
+	var body := mesh.get_parent() as RigidBody3D
 	var ovr := mesh.get_surface_override_material(0) as StandardMaterial3D
 	if ovr:
+		if body and not body.has_meta("_free_albedo"):
+			body.set_meta("_free_albedo", ovr.albedo_color)
 		return ovr
 	var src: Material = null
 	if mesh.mesh:
@@ -186,6 +198,8 @@ func _ensure_throwable_material(mesh: MeshInstance3D) -> StandardMaterial3D:
 		ovr = StandardMaterial3D.new()
 		ovr.albedo_color = THROWABLE_COLOR_FREE
 	mesh.set_surface_override_material(0, ovr)
+	if body and not body.has_meta("_free_albedo"):
+		body.set_meta("_free_albedo", ovr.albedo_color)
 	return ovr
 
 
@@ -196,12 +210,15 @@ func _update_throwable_visual(rb: RigidBody3D) -> void:
 	if mesh == null:
 		return
 	var mat := _ensure_throwable_material(mesh)
+	var free_col := THROWABLE_COLOR_FREE
+	if rb.has_meta("_free_albedo"):
+		free_col = rb.get_meta("_free_albedo") as Color
 	if rb == _held:
-		mat.albedo_color = THROWABLE_COLOR_FREE
+		mat.albedo_color = free_col
 	elif rb.freeze:
 		mat.albedo_color = THROWABLE_COLOR_FIXED
 	else:
-		mat.albedo_color = THROWABLE_COLOR_FREE
+		mat.albedo_color = free_col
 
 
 func _refresh_all_throwable_visuals() -> void:
@@ -230,6 +247,28 @@ func _spawn_throwable_cube() -> void:
 	if _cubes_world_locked:
 		cube.freeze = true
 	_update_throwable_visual(cube)
+
+
+func _spawn_throwable_pyramid() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var pyr := THROWABLE_PYRAMID_SCENE.instantiate() as RigidBody3D
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() > 0.0001:
+		forward = forward.normalized()
+	else:
+		forward = Vector3(0.0, 0.0, -1.0)
+	var spawn_pos := global_position + forward * cube_spawn_distance
+	spawn_pos.y = global_position.y + pyramid_spawn_height
+	scene.add_child(pyr)
+	pyr.global_position = spawn_pos
+	pyr.linear_velocity = Vector3.ZERO
+	pyr.angular_velocity = Vector3.ZERO
+	if _cubes_world_locked:
+		pyr.freeze = true
+	_update_throwable_visual(pyr)
 
 
 func _toggle_cubes_world_lock() -> void:
