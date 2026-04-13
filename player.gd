@@ -7,6 +7,7 @@ extends CharacterBody3D
 @export var throw_speed_min: float = 3.5
 @export var throw_speed_max: float = 22.0
 @export var throw_charge_full_time: float = 0.85
+@export var body_push_multiplier: float = 1.15
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -97,12 +98,37 @@ func _physics_process(delta: float) -> void:
 	velocity.x = target_xz.x
 	velocity.z = target_xz.z
 
+	var move_vel := velocity
 	move_and_slide()
+	_apply_body_pushes(move_vel)
 
 	if _held:
 		_held.global_position = _hold_point.global_position
 		_held.linear_velocity = Vector3.ZERO
 		_held.angular_velocity = Vector3.ZERO
+
+
+func _apply_body_pushes(move_velocity: Vector3) -> void:
+	var v_h := Vector3(move_velocity.x, 0.0, move_velocity.z)
+	if v_h.length_squared() < 0.0001:
+		return
+	for i in get_slide_collision_count():
+		var c := get_slide_collision(i)
+		var col := c.get_collider()
+		if not col is RigidBody3D:
+			continue
+		var rb := col as RigidBody3D
+		if rb.freeze or rb == _held:
+			continue
+		var n := c.get_normal()
+		var n_h := Vector3(n.x, 0.0, n.z)
+		if n_h.length_squared() < 0.0001:
+			continue
+		n_h = n_h.normalized()
+		var speed_into := v_h.dot(-n_h)
+		if speed_into <= 0.0:
+			continue
+		rb.apply_central_impulse(-n_h * speed_into * rb.mass * body_push_multiplier)
 
 
 func _try_pickup() -> void:
