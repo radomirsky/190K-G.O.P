@@ -164,13 +164,14 @@ func _physics_process(delta: float) -> void:
 		_jump_requested = false
 
 	var dir2 := Vector2.ZERO
-	if Input.is_key_pressed(KEY_A):
+	# Физические позиции WASD — движение не ломается на русской и др. раскладке.
+	if Input.is_physical_key_pressed(KEY_A):
 		dir2.x -= 1.0
-	if Input.is_key_pressed(KEY_D):
+	if Input.is_physical_key_pressed(KEY_D):
 		dir2.x += 1.0
-	if Input.is_key_pressed(KEY_W):
+	if Input.is_physical_key_pressed(KEY_W):
 		dir2.y -= 1.0
-	if Input.is_key_pressed(KEY_S):
+	if Input.is_physical_key_pressed(KEY_S):
 		dir2.y += 1.0
 
 	var direction := Vector3.ZERO
