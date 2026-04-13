@@ -68,6 +68,24 @@ func _clamp_camera_pitch() -> void:
 	)
 
 
+func _apply_look_from_cursor() -> void:
+	if _camera == null or not is_inside_tree():
+		return
+	var mouse_pos := get_viewport().get_mouse_position()
+	var d := _camera.project_ray_normal(mouse_pos)
+	if d.length_squared() < 1e-10:
+		return
+	d = d.normalized()
+	var horiz := Vector3(d.x, 0.0, d.z)
+	if horiz.length_squared() > 1e-10:
+		horiz = horiz.normalized()
+		rotation.y = atan2(horiz.x, -horiz.z)
+	var d_local := global_transform.basis.inverse() * d
+	var pitch := atan2(d_local.y, -d_local.z)
+	_camera_pivot.rotation.x = pitch
+	_clamp_camera_pitch()
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		_jump_requested = true
@@ -84,14 +102,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 	if event is InputEventMouseMotion:
-		var can_look := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-		if (
-			not can_look
-			and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
-			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
-		):
-			can_look = true
-		if can_look:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			rotate_y(-event.relative.x * mouse_sensitivity)
 			_camera_pivot.rotate_x(-event.relative.y * mouse_sensitivity)
 			_clamp_camera_pitch()
@@ -190,22 +201,25 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_apply_body_pushes(move_vel)
 
-	var lk := look_key_speed * delta
-	if Input.is_key_pressed(KEY_LEFT):
-		rotate_y(lk)
-	if Input.is_key_pressed(KEY_RIGHT):
-		rotate_y(-lk)
-	if Input.is_key_pressed(KEY_UP):
-		_camera_pivot.rotate_x(lk)
-	if Input.is_key_pressed(KEY_DOWN):
-		_camera_pivot.rotate_x(-lk)
-	if (
-		Input.is_key_pressed(KEY_LEFT)
-		or Input.is_key_pressed(KEY_RIGHT)
-		or Input.is_key_pressed(KEY_UP)
-		or Input.is_key_pressed(KEY_DOWN)
-	):
-		_clamp_camera_pitch()
+	if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
+		_apply_look_from_cursor()
+	else:
+		var lk := look_key_speed * delta
+		if Input.is_key_pressed(KEY_LEFT):
+			rotate_y(lk)
+		if Input.is_key_pressed(KEY_RIGHT):
+			rotate_y(-lk)
+		if Input.is_key_pressed(KEY_UP):
+			_camera_pivot.rotate_x(lk)
+		if Input.is_key_pressed(KEY_DOWN):
+			_camera_pivot.rotate_x(-lk)
+		if (
+			Input.is_key_pressed(KEY_LEFT)
+			or Input.is_key_pressed(KEY_RIGHT)
+			or Input.is_key_pressed(KEY_UP)
+			or Input.is_key_pressed(KEY_DOWN)
+		):
+			_clamp_camera_pitch()
 
 	if _held:
 		_held.global_position = _hold_point.global_position
