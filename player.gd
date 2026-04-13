@@ -30,8 +30,6 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _held: RigidBody3D = null
 var _jump_requested: bool = false
 var _throw_press_usec: int = -1
-var _held_saved_collision_layer: int = 1
-var _held_saved_collision_mask: int = 1
 var _cubes_world_locked: bool = false
 var _want_mouse_captured: bool = true
 var _crosshair_layer: CanvasLayer = null
@@ -51,6 +49,11 @@ func _ready() -> void:
 	call_deferred("_setup_aim_feedback")
 	_look_yaw_target = rotation.y
 	_look_pitch_target = _camera_pivot.rotation.x
+
+
+func _exit_tree() -> void:
+	if _held and is_instance_valid(_held):
+		remove_collision_exception_with(_held)
 
 
 func _notification(what: int) -> void:
@@ -393,6 +396,7 @@ func _spawn_throwable_cube() -> void:
 	cube.angular_velocity = Vector3.ZERO
 	if _cubes_world_locked:
 		cube.freeze = true
+		cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	_update_throwable_visual(cube)
 
 
@@ -415,6 +419,7 @@ func _spawn_throwable_pyramid() -> void:
 	pyr.angular_velocity = Vector3.ZERO
 	if _cubes_world_locked:
 		pyr.freeze = true
+		pyr.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	_update_throwable_visual(pyr)
 
 
@@ -437,6 +442,7 @@ func _apply_throwables_world_lock() -> void:
 			continue
 		rb.freeze = _cubes_world_locked
 		if _cubes_world_locked:
+			rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 			rb.linear_velocity = Vector3.ZERO
 			rb.angular_velocity = Vector3.ZERO
 	_refresh_all_throwable_visuals()
@@ -547,11 +553,9 @@ func _try_pickup() -> void:
 	if collider == null:
 		return
 	_held = collider
-	_held_saved_collision_layer = _held.collision_layer
-	_held_saved_collision_mask = _held.collision_mask
-	_held.collision_layer = 0
-	_held.collision_mask = 0
+	add_collision_exception_with(_held)
 	_held.freeze = true
+	_held.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	_throw_press_usec = -1
 	_update_throwable_visual(_held)
 
@@ -560,9 +564,10 @@ func _release_held() -> void:
 	if not _held:
 		return
 	var body := _held
-	body.collision_layer = _held_saved_collision_layer
-	body.collision_mask = _held_saved_collision_mask
+	remove_collision_exception_with(body)
 	body.freeze = _cubes_world_locked
+	if _cubes_world_locked:
+		body.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	_held = null
 	_throw_press_usec = -1
 	_update_throwable_visual(body)
@@ -579,8 +584,7 @@ func _throw_held_charged() -> void:
 	var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
 	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
 	var impulse_dir := -_camera.global_transform.basis.z.normalized()
-	body.collision_layer = _held_saved_collision_layer
-	body.collision_mask = _held_saved_collision_mask
+	remove_collision_exception_with(body)
 	body.freeze = false
 	body.linear_velocity = impulse_dir * speed
 	_held = null
