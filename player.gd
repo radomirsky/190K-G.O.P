@@ -83,6 +83,25 @@ func _clamp_pitch_target(p: float) -> float:
 	return clampf(p, -lim, lim)
 
 
+func _aim_ray_from_dir() -> Array:
+	var from: Vector3
+	var dir: Vector3
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		from = _camera.global_position
+		dir = -_camera.global_transform.basis.z
+	else:
+		var mp := get_viewport().get_mouse_position()
+		from = _camera.project_ray_origin(mp)
+		dir = _camera.project_ray_normal(mp)
+	return [from, dir]
+
+
+func _is_use_key(event: InputEventKey) -> bool:
+	if not event.pressed or event.echo:
+		return false
+	return event.keycode == KEY_E or event.physical_keycode == KEY_E
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		_jump_requested = true
@@ -158,7 +177,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		):
 			_try_glue_throwable_cubes()
 			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		elif _is_use_key(event):
 			if _held:
 				_release_held()
 			else:
@@ -281,21 +300,18 @@ func _setup_aim_feedback() -> void:
 func _update_aim_feedback() -> void:
 	if _hit_marker == null or _camera == null or not is_inside_tree():
 		return
-	var from: Vector3
-	var dir: Vector3
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if _crosshair_layer:
 			_crosshair_layer.visible = true
-		from = _camera.global_position
-		dir = -_camera.global_transform.basis.z
 	else:
 		if _crosshair_layer:
 			_crosshair_layer.visible = false
-		from = _camera.project_ray_origin(get_viewport().get_mouse_position())
-		dir = _camera.project_ray_normal(get_viewport().get_mouse_position())
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = ad[1]
 
 	var space := get_world_3d().direct_space_state
-	var q := PhysicsRayQueryParameters3D.create(from, from + dir * aim_ray_length)
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir.normalized() * aim_ray_length)
 	q.exclude = [get_rid()]
 	var hit: Dictionary = space.intersect_ray(q)
 	if hit.is_empty():
@@ -429,9 +445,11 @@ func _apply_throwables_world_lock() -> void:
 
 
 func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
 	var space := get_world_3d().direct_space_state
-	var from := _camera.global_position
-	var to := from - _camera.global_transform.basis.z * max_dist
+	var to := from + dir * max_dist
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
 	query.exclude = [get_rid()]
