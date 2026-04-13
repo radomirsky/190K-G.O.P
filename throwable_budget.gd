@@ -48,7 +48,7 @@ func _trim_before_add() -> void:
 		guard += 1
 		if _fifo.is_empty():
 			break
-		var victim := _fifo.pop_front()
+		var victim: RigidBody3D = _fifo.pop_at(0)
 		if not is_instance_valid(victim):
 			continue
 		if victim.is_in_group("held_throwable"):
@@ -63,7 +63,7 @@ func _trim_to_cap() -> void:
 		guard += 1
 		if _fifo.is_empty():
 			break
-		var victim := _fifo.pop_front()
+		var victim: RigidBody3D = _fifo.pop_at(0)
 		if not is_instance_valid(victim):
 			continue
 		if victim.is_in_group("held_throwable"):
