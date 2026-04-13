@@ -32,7 +32,7 @@ func _on_rb_tree_exiting(rb: RigidBody3D) -> void:
 		_fifo.remove_at(i)
 
 
-func register(rb: RigidBody3D) -> void:
+func track_throwable(rb: RigidBody3D) -> void:
 	if rb == null or not is_instance_valid(rb):
 		return
 	if _fifo.has(rb):

@@ -431,7 +431,7 @@ func _spawn_throwable_cube() -> void:
 		cube.freeze = true
 		cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	_update_throwable_visual(cube)
-	ThrowablesBudget.register(cube)
+	ThrowablesBudget.track_throwable(cube)
 
 
 func _spawn_throwable_pyramid() -> void:
@@ -455,7 +455,7 @@ func _spawn_throwable_pyramid() -> void:
 		pyr.freeze = true
 		pyr.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	_update_throwable_visual(pyr)
-	ThrowablesBudget.register(pyr)
+	ThrowablesBudget.track_throwable(pyr)
 
 
 func _toggle_cubes_world_lock() -> void:
@@ -554,7 +554,7 @@ func _arrange_cubes_humanoid() -> void:
 		cube.freeze = true
 		cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		_update_throwable_visual(cube)
-		ThrowablesBudget.register(cube)
+		ThrowablesBudget.track_throwable(cube)
 
 
 func _glue_joint_pair_exists(scene: Node, a: RigidBody3D, b: RigidBody3D) -> bool:

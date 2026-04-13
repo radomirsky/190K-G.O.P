@@ -95,7 +95,7 @@ func _spawn_final_crumbs() -> void:
 		crumb.add_child(col)
 		crumb.add_to_group("throwable")
 		parent_node.add_child(crumb)
-		ThrowablesBudget.register(crumb)
+		ThrowablesBudget.track_throwable(crumb)
 		crumb.global_position = p + basis * Vector3(randf_range(-0.12, 0.12), randf_range(-0.08, 0.12), randf_range(-0.12, 0.12))
 		crumb.linear_velocity = inherit_v * 0.35 + basis * _shatter_random_unit() * 2.8
 		crumb.angular_velocity = Vector3(
@@ -152,7 +152,7 @@ func _shatter_and_free() -> void:
 		shard.add_child(col)
 		shard.add_to_group("throwable")
 		parent_node.add_child(shard)
-		ThrowablesBudget.register(shard)
+		ThrowablesBudget.track_throwable(shard)
 		shard.global_position = (
 			p
 			+ basis * Vector3(randf_range(-0.22, 0.22), randf_range(-0.22, 0.22), randf_range(-0.22, 0.22))
