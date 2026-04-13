@@ -17,6 +17,7 @@ const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 @export var pyramid_spawn_height: float = 0.575
 @export var glue_look_distance: float = 4.0
 @export var glue_pair_max_distance: float = 1.45
+@export var aim_ray_length: float = 48.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -31,6 +32,8 @@ var _held_saved_collision_layer: int = 1
 var _held_saved_collision_mask: int = 1
 var _cubes_world_locked: bool = false
 var _want_mouse_captured: bool = true
+var _crosshair_layer: CanvasLayer = null
+var _hit_marker: MeshInstance3D = null
 
 
 func _ready() -> void:
@@ -41,6 +44,7 @@ func _ready() -> void:
 		var cb := Callable(self, "_restore_mouse_capture_after_focus")
 		if not win.focus_entered.is_connected(cb):
 			win.focus_entered.connect(cb)
+	call_deferred("_setup_aim_feedback")
 
 
 func _notification(what: int) -> void:
@@ -176,6 +180,83 @@ func _physics_process(delta: float) -> void:
 		_held.global_position = _hold_point.global_position
 		_held.linear_velocity = Vector3.ZERO
 		_held.angular_velocity = Vector3.ZERO
+
+	_update_aim_feedback()
+
+
+func _setup_aim_feedback() -> void:
+	if _crosshair_layer == null:
+		_crosshair_layer = CanvasLayer.new()
+		_crosshair_layer.layer = 100
+		add_child(_crosshair_layer)
+		var root := Control.new()
+		root.set_anchors_preset(Control.PRESET_FULL_RECT)
+		root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_crosshair_layer.add_child(root)
+		var cc := CenterContainer.new()
+		cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+		root.add_child(cc)
+		var cross := Control.new()
+		cross.custom_minimum_size = Vector2(22, 22)
+		var vbar := ColorRect.new()
+		vbar.position = Vector2(10, 3)
+		vbar.size = Vector2(2, 16)
+		vbar.color = Color(1, 1, 1, 0.92)
+		var hbar := ColorRect.new()
+		hbar.position = Vector2(3, 10)
+		hbar.size = Vector2(16, 2)
+		hbar.color = Color(1, 1, 1, 0.92)
+		cross.add_child(vbar)
+		cross.add_child(hbar)
+		cc.add_child(cross)
+
+	if _hit_marker == null:
+		var scene := get_tree().current_scene
+		if scene == null:
+			return
+		_hit_marker = MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.065
+		sm.height = 0.13
+		_hit_marker.mesh = sm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.9, 0.2, 0.95)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_hit_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_hit_marker.material_override = mat
+		_hit_marker.visible = false
+		scene.add_child(_hit_marker)
+
+
+func _update_aim_feedback() -> void:
+	if _hit_marker == null or _camera == null or not is_inside_tree():
+		return
+	var from: Vector3
+	var dir: Vector3
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if _crosshair_layer:
+			_crosshair_layer.visible = true
+		from = _camera.global_position
+		dir = -_camera.global_transform.basis.z
+	else:
+		if _crosshair_layer:
+			_crosshair_layer.visible = false
+		from = _camera.project_ray_origin(get_viewport().get_mouse_position())
+		dir = _camera.project_ray_normal(get_viewport().get_mouse_position())
+
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir * aim_ray_length)
+	q.exclude = [get_rid()]
+	var hit: Dictionary = space.intersect_ray(q)
+	if hit.is_empty():
+		_hit_marker.visible = false
+		return
+	var n := Vector3.UP
+	if hit.has("normal"):
+		n = hit["normal"] as Vector3
+	_hit_marker.global_position = hit.position as Vector3 + n * 0.04
+	_hit_marker.visible = true
 
 
 func _get_throwable_mesh(rb: RigidBody3D) -> MeshInstance3D:
