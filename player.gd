@@ -65,7 +65,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_want_mouse_captured = true
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		accept_event()
+		get_viewport().set_input_as_handled()
 
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(-event.relative.x * mouse_sensitivity)
@@ -95,34 +95,34 @@ func _unhandled_input(event: InputEvent) -> void:
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
 			_spawn_throwable_cube()
-			accept_event()
+			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_Z
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
 			_toggle_cubes_world_lock()
-			accept_event()
+			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_X
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
 			_unlock_cubes_world()
-			accept_event()
+			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_B
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
 			_try_glue_throwable_cubes()
-			accept_event()
+			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			if _held:
 				_release_held()
 			else:
 				_try_pickup()
-			accept_event()
+			get_viewport().set_input_as_handled()
 
 
 func _physics_process(delta: float) -> void:
