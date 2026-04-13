@@ -19,6 +19,8 @@ var _held: RigidBody3D = null
 var _jump_requested: bool = false
 var _throw_press_usec: int = -1
 var _standing_on_throwable: bool = false
+var _held_saved_collision_layer: int = 1
+var _held_saved_collision_mask: int = 1
 
 
 func _ready() -> void:
@@ -163,6 +165,10 @@ func _try_pickup() -> void:
 	var collider: Object = hit.get("collider")
 	if collider is RigidBody3D and collider.is_in_group("throwable"):
 		_held = collider as RigidBody3D
+		_held_saved_collision_layer = _held.collision_layer
+		_held_saved_collision_mask = _held.collision_mask
+		_held.collision_layer = 0
+		_held.collision_mask = 0
 		_held.freeze = true
 		_throw_press_usec = -1
 
@@ -170,6 +176,8 @@ func _try_pickup() -> void:
 func _release_held() -> void:
 	if not _held:
 		return
+	_held.collision_layer = _held_saved_collision_layer
+	_held.collision_mask = _held_saved_collision_mask
 	_held.freeze = false
 	_held = null
 	_throw_press_usec = -1
@@ -185,6 +193,8 @@ func _throw_held_charged() -> void:
 	var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
 	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
 	var impulse_dir := -_camera.global_transform.basis.z.normalized()
+	_held.collision_layer = _held_saved_collision_layer
+	_held.collision_mask = _held_saved_collision_mask
 	_held.freeze = false
 	_held.linear_velocity = impulse_dir * speed
 	_held = null
