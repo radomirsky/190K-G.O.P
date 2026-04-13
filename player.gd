@@ -124,6 +124,11 @@ func _is_use_key(event: InputEventKey) -> bool:
 	return event.keycode == KEY_E or event.physical_keycode == KEY_E
 
 
+func _world_actions_input_ok() -> bool:
+	var m := Input.mouse_mode
+	return m == Input.MOUSE_MODE_CAPTURED or m == Input.MOUSE_MODE_VISIBLE
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		_jump_requested = true
@@ -167,42 +172,42 @@ func _unhandled_input(event: InputEvent) -> void:
 		if (
 			event.keycode == KEY_Q
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			and _world_actions_input_ok()
 		):
 			_spawn_throwable_cube()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_R
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			and _world_actions_input_ok()
 		):
 			_spawn_throwable_pyramid()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_Z
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			and _world_actions_input_ok()
 		):
 			_toggle_cubes_world_lock()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_X
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			and _world_actions_input_ok()
 		):
 			_unlock_cubes_world()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_B
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			and _world_actions_input_ok()
 		):
 			_arrange_cubes_humanoid()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_G
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
-			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			and _world_actions_input_ok()
 		):
 			_try_glue_throwable_cubes()
 			get_viewport().set_input_as_handled()
