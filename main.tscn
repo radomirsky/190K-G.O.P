@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[node name="Main" type="Node"]
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 0
+offset_left = 48.0
+offset_top = 48.0
+offset_right = 520.0
+offset_bottom = 120.0
+theme_override_font_sizes/font_size = 28
+text = "Минимальная база Godot — откройте проект в редакторе 4.x"

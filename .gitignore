@@ -1,0 +1,16 @@
+# Godot 4+
+.godot/
+
+# Import cache (если появятся ассеты)
+.import/
+
+# Экспорты / билды
+export_presets.cfg
+*.exe
+*.pck
+*.zip
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.tmp
