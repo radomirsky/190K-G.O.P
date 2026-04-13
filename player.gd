@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
+
 @export var move_speed: float = 5.0
 @export var jump_velocity: float = 4.6
 @export var mouse_sensitivity: float = 0.0025
@@ -8,6 +10,7 @@ extends CharacterBody3D
 @export var throw_speed_max: float = 22.0
 @export var throw_charge_full_time: float = 0.85
 @export var body_push_multiplier: float = 1.15
+@export var cube_spawn_distance: float = 3.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -61,6 +64,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				_throw_held_charged()
 
 	if event is InputEventKey and event.pressed and not event.echo:
+		if (
+			event.keycode == KEY_Q
+			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		):
+			_spawn_throwable_cube()
 		if event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			if _held:
 				_release_held()
@@ -127,6 +136,25 @@ func _is_standing_on_throwable_floor() -> bool:
 		if col is RigidBody3D and col.is_in_group("throwable"):
 			return true
 	return false
+
+
+func _spawn_throwable_cube() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var cube := THROWABLE_CUBE_SCENE.instantiate() as RigidBody3D
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() > 0.0001:
+		forward = forward.normalized()
+	else:
+		forward = Vector3(0.0, 0.0, -1.0)
+	var spawn_pos := global_position + forward * cube_spawn_distance
+	spawn_pos.y = global_position.y + 0.5
+	scene.add_child(cube)
+	cube.global_position = spawn_pos
+	cube.linear_velocity = Vector3.ZERO
+	cube.angular_velocity = Vector3.ZERO
 
 
 func _apply_body_pushes(move_velocity: Vector3) -> void:
