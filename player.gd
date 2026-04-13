@@ -82,25 +82,6 @@ func _clamp_pitch_target(p: float) -> float:
 	return clampf(p, -lim, lim)
 
 
-func _compute_cursor_look_targets() -> Vector2:
-	if _camera == null or not is_inside_tree():
-		return Vector2(_look_yaw_target, _look_pitch_target)
-	var mouse_pos := get_viewport().get_mouse_position()
-	var d := _camera.project_ray_normal(mouse_pos)
-	if d.length_squared() < 1e-10:
-		return Vector2(_look_yaw_target, _look_pitch_target)
-	d = d.normalized()
-	var horiz := Vector3(d.x, 0.0, d.z)
-	var target_yaw := _look_yaw_target
-	if horiz.length_squared() > 1e-10:
-		horiz = horiz.normalized()
-		target_yaw = atan2(horiz.x, -horiz.z)
-	var yaw_basis := Basis.from_euler(Vector3(0.0, target_yaw, 0.0))
-	var d_local := yaw_basis.inverse() * d
-	var target_pitch := _clamp_pitch_target(atan2(d_local.y, -d_local.z))
-	return Vector2(target_yaw, target_pitch)
-
-
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		_jump_requested = true
@@ -119,7 +100,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 	if event is InputEventMouseMotion:
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if (
+			Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
+		):
 			_look_yaw_target -= event.relative.x * mouse_sensitivity
 			_look_pitch_target = _clamp_pitch_target(
 				_look_pitch_target - event.relative.y * mouse_sensitivity
@@ -219,20 +203,15 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_apply_body_pushes(move_vel)
 
-	if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
-		var t := _compute_cursor_look_targets()
-		_look_yaw_target = t.x
-		_look_pitch_target = t.y
-	else:
-		var lk := look_key_speed * delta
-		if Input.is_key_pressed(KEY_LEFT):
-			_look_yaw_target += lk
-		if Input.is_key_pressed(KEY_RIGHT):
-			_look_yaw_target -= lk
-		if Input.is_key_pressed(KEY_UP):
-			_look_pitch_target = _clamp_pitch_target(_look_pitch_target + lk)
-		if Input.is_key_pressed(KEY_DOWN):
-			_look_pitch_target = _clamp_pitch_target(_look_pitch_target - lk)
+	var lk := look_key_speed * delta
+	if Input.is_key_pressed(KEY_LEFT):
+		_look_yaw_target += lk
+	if Input.is_key_pressed(KEY_RIGHT):
+		_look_yaw_target -= lk
+	if Input.is_key_pressed(KEY_UP):
+		_look_pitch_target = _clamp_pitch_target(_look_pitch_target + lk)
+	if Input.is_key_pressed(KEY_DOWN):
+		_look_pitch_target = _clamp_pitch_target(_look_pitch_target - lk)
 
 	var smooth_k := 1.0
 	if look_smoothing > 0.0:
