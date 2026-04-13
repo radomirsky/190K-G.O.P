@@ -77,6 +77,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
 			_toggle_cubes_world_lock()
+		if (
+			event.keycode == KEY_X
+			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		):
+			_unlock_cubes_world()
 		if event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			if _held:
 				_release_held()
@@ -168,6 +174,11 @@ func _spawn_throwable_cube() -> void:
 
 func _toggle_cubes_world_lock() -> void:
 	_cubes_world_locked = not _cubes_world_locked
+	_apply_throwables_world_lock()
+
+
+func _unlock_cubes_world() -> void:
+	_cubes_world_locked = false
 	_apply_throwables_world_lock()
 
 
