@@ -35,27 +35,25 @@ func _on_body_shape_entered(
 	var rel := linear_velocity.distance_to(other.linear_velocity)
 	var sp := linear_velocity.length()
 	var op := other.linear_velocity.length()
-	const IDLE_SPD := 0.03
-	const IDLE_REL := 0.05
+	const IDLE_SPD := 0.02
+	const IDLE_REL := 0.035
 	if sp < IDLE_SPD and op < IDLE_SPD and rel < IDLE_REL:
 		return
 	if destroy_min_relative_speed > 0.0 and rel < destroy_min_relative_speed:
 		return
-	const V_EPS := 0.008
-	if sp < op - V_EPS:
+	if get_instance_id() < other.get_instance_id():
 		return
-	if absf(sp - op) <= V_EPS:
-		if get_instance_id() < other.get_instance_id():
-			return
-	var keep_v := linear_velocity
 	if is_instance_valid(other):
 		if other.has_method("_shatter_and_free") and (
 			other.name == "Cube" or other.name.begins_with("BrickShard")
 		):
 			other.call_deferred("_shatter_and_free")
-		else:
+		elif other.is_in_group("throwable"):
 			other.call_deferred("queue_free")
-	call_deferred("_restore_velocity", keep_v)
+	if has_method("_shatter_and_free") and (name == "Cube" or name.begins_with("BrickShard")):
+		call_deferred("_shatter_and_free")
+	elif is_in_group("throwable"):
+		call_deferred("queue_free")
 
 
 func _restore_velocity(v: Vector3) -> void:
@@ -122,7 +120,7 @@ func _shatter_and_free() -> void:
 	var basis := global_transform.basis
 	var sz := shatter_shard_size
 	var n: int = clampi(shatter_piece_count, 2, 12)
-	var next_sz: float = maxf(sz * 0.74, min_shard_size * 0.95)
+	var next_sz: float = maxf(sz * 0.64, min_shard_size * 0.95)
 	var child_n: int = clampi(maxi(2, n - 1), 2, 8)
 	if sz < 0.22:
 		child_n = clampi(maxi(2, n - 2), 2, 6)
