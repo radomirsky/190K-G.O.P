@@ -33,17 +33,18 @@ func _on_body_shape_entered(
 		call_deferred("_restore_velocity", keep)
 		return
 	var rel := linear_velocity.distance_to(other.linear_velocity)
-	var v2 := linear_velocity.length_squared()
-	var o2 := other.linear_velocity.length_squared()
-	const REST2 := 1e-5
-	if v2 < REST2 and o2 < REST2 and rel < 0.001:
+	var sp := linear_velocity.length()
+	var op := other.linear_velocity.length()
+	const IDLE_SPD := 0.03
+	const IDLE_REL := 0.05
+	if sp < IDLE_SPD and op < IDLE_SPD and rel < IDLE_REL:
 		return
 	if destroy_min_relative_speed > 0.0 and rel < destroy_min_relative_speed:
 		return
-	const EPS := 1e-3
-	if v2 < o2 - EPS:
+	const V_EPS := 0.008
+	if sp < op - V_EPS:
 		return
-	if absf(v2 - o2) <= EPS:
+	if absf(sp - op) <= V_EPS:
 		if get_instance_id() < other.get_instance_id():
 			return
 	var keep_v := linear_velocity
