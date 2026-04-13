@@ -1,6 +1,8 @@
 extends CharacterBody3D
 
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
+const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
+const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 
 @export var move_speed: float = 5.0
 @export var jump_velocity: float = 4.6
@@ -186,6 +188,47 @@ func _is_standing_on_throwable_floor() -> bool:
 	return false
 
 
+func _get_throwable_mesh(rb: RigidBody3D) -> MeshInstance3D:
+	return rb.get_node_or_null("MeshInstance3D") as MeshInstance3D
+
+
+func _ensure_throwable_material(mesh: MeshInstance3D) -> StandardMaterial3D:
+	var ovr := mesh.get_surface_override_material(0) as StandardMaterial3D
+	if ovr:
+		return ovr
+	var src: Material = null
+	if mesh.mesh:
+		src = mesh.mesh.surface_get_material(0)
+	if src is StandardMaterial3D:
+		ovr = (src as StandardMaterial3D).duplicate() as StandardMaterial3D
+	else:
+		ovr = StandardMaterial3D.new()
+		ovr.albedo_color = THROWABLE_COLOR_FREE
+	mesh.set_surface_override_material(0, ovr)
+	return ovr
+
+
+func _update_throwable_visual(rb: RigidBody3D) -> void:
+	if rb == null or not is_instance_valid(rb):
+		return
+	var mesh := _get_throwable_mesh(rb)
+	if mesh == null:
+		return
+	var mat := _ensure_throwable_material(mesh)
+	if rb == _held:
+		mat.albedo_color = THROWABLE_COLOR_FREE
+	elif rb.freeze:
+		mat.albedo_color = THROWABLE_COLOR_FIXED
+	else:
+		mat.albedo_color = THROWABLE_COLOR_FREE
+
+
+func _refresh_all_throwable_visuals() -> void:
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if node is RigidBody3D:
+			_update_throwable_visual(node as RigidBody3D)
+
+
 func _spawn_throwable_cube() -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
@@ -205,6 +248,7 @@ func _spawn_throwable_cube() -> void:
 	cube.angular_velocity = Vector3.ZERO
 	if _cubes_world_locked:
 		cube.freeze = true
+	_update_throwable_visual(cube)
 
 
 func _toggle_cubes_world_lock() -> void:
@@ -228,6 +272,7 @@ func _apply_throwables_world_lock() -> void:
 		if _cubes_world_locked:
 			rb.linear_velocity = Vector3.ZERO
 			rb.angular_velocity = Vector3.ZERO
+	_refresh_all_throwable_visuals()
 
 
 func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:
@@ -303,6 +348,8 @@ func _try_glue_throwable_cubes() -> void:
 	joint.node_b = scene.get_path_to(b)
 	joint.set_param(PinJoint3D.PARAM_BIAS, 0.65)
 	joint.set_param(PinJoint3D.PARAM_DAMPING, 1.15)
+	_update_throwable_visual(a)
+	_update_throwable_visual(b)
 
 
 func _apply_body_pushes(move_velocity: Vector3) -> void:
@@ -339,30 +386,35 @@ func _try_pickup() -> void:
 	_held.collision_mask = 0
 	_held.freeze = true
 	_throw_press_usec = -1
+	_update_throwable_visual(_held)
 
 
 func _release_held() -> void:
 	if not _held:
 		return
-	_held.collision_layer = _held_saved_collision_layer
-	_held.collision_mask = _held_saved_collision_mask
-	_held.freeze = _cubes_world_locked
+	var body := _held
+	body.collision_layer = _held_saved_collision_layer
+	body.collision_mask = _held_saved_collision_mask
+	body.freeze = _cubes_world_locked
 	_held = null
 	_throw_press_usec = -1
+	_update_throwable_visual(body)
 
 
 func _throw_held_charged() -> void:
 	if not _held:
 		_throw_press_usec = -1
 		return
+	var body := _held
 	var elapsed_sec := (Time.get_ticks_usec() - _throw_press_usec) / 1_000_000.0
 	_throw_press_usec = -1
 	elapsed_sec = maxf(elapsed_sec, 0.0)
 	var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
 	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
 	var impulse_dir := -_camera.global_transform.basis.z.normalized()
-	_held.collision_layer = _held_saved_collision_layer
-	_held.collision_mask = _held_saved_collision_mask
-	_held.freeze = false
-	_held.linear_velocity = impulse_dir * speed
+	body.collision_layer = _held_saved_collision_layer
+	body.collision_mask = _held_saved_collision_mask
+	body.freeze = false
+	body.linear_velocity = impulse_dir * speed
 	_held = null
+	_update_throwable_visual(body)
