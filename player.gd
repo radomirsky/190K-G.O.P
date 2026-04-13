@@ -12,6 +12,7 @@ const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 @export var throw_speed_min: float = 3.5
 @export var throw_speed_max: float = 22.0
 @export var throw_charge_full_time: float = 0.85
+@export_range(0.0, 1.0, 0.05) var throw_tap_charge: float = 1.0
 @export var body_push_multiplier: float = 1.15
 @export var cube_spawn_distance: float = 3.0
 @export var pyramid_spawn_height: float = 0.575
@@ -96,6 +97,11 @@ func _aim_ray_from_dir() -> Array:
 	return [from, dir]
 
 
+func _throw_aim_dir() -> Vector3:
+	var ad := _aim_ray_from_dir()
+	return (ad[1] as Vector3).normalized()
+
+
 func _is_use_key(event: InputEventKey) -> bool:
 	if not event.pressed or event.echo:
 		return false
@@ -129,17 +135,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				_look_pitch_target - event.relative.y * mouse_sensitivity
 			)
 
-	if (
-		event is InputEventMouseButton
-		and event.button_index == MOUSE_BUTTON_LEFT
-		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	):
-		if event.pressed:
-			if _held:
-				_throw_press_usec = Time.get_ticks_usec()
-		else:
-			if _held and _throw_press_usec >= 0:
-				_throw_held_charged()
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if (
+			Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+			or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
+		):
+			if event.pressed:
+				if _held:
+					_throw_press_usec = Time.get_ticks_usec()
+			else:
+				if _held and _throw_press_usec >= 0:
+					_throw_held_charged()
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		if (
@@ -179,7 +185,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif _is_use_key(event):
 			if _held:
-				_release_held()
+				if event.shift_pressed:
+					_release_held()
+				else:
+					_throw_held_tap()
 			else:
 				_try_pickup()
 			get_viewport().set_input_as_handled()
@@ -573,6 +582,25 @@ func _release_held() -> void:
 	_update_throwable_visual(body)
 
 
+func _apply_throw_body(body: RigidBody3D, dir: Vector3, speed: float) -> void:
+	body.remove_from_group("held_throwable")
+	remove_collision_exception_with(body)
+	body.freeze = false
+	body.linear_velocity = dir * speed
+	_held = null
+	_throw_press_usec = -1
+	_update_throwable_visual(body)
+
+
+func _throw_held_tap() -> void:
+	if not _held:
+		return
+	var body := _held
+	var charge := clampf(throw_tap_charge, 0.0, 1.0)
+	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
+	_apply_throw_body(body, _throw_aim_dir(), speed)
+
+
 func _throw_held_charged() -> void:
 	if not _held:
 		_throw_press_usec = -1
@@ -583,10 +611,4 @@ func _throw_held_charged() -> void:
 	elapsed_sec = maxf(elapsed_sec, 0.0)
 	var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
 	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
-	var impulse_dir := -_camera.global_transform.basis.z.normalized()
-	body.remove_from_group("held_throwable")
-	remove_collision_exception_with(body)
-	body.freeze = false
-	body.linear_velocity = impulse_dir * speed
-	_held = null
-	_update_throwable_visual(body)
+	_apply_throw_body(body, _throw_aim_dir(), speed)
