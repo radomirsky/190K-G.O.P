@@ -25,7 +25,6 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _held: RigidBody3D = null
 var _jump_requested: bool = false
 var _throw_press_usec: int = -1
-var _standing_on_throwable: bool = false
 var _held_saved_collision_layer: int = 1
 var _held_saved_collision_mask: int = 1
 var _cubes_world_locked: bool = false
@@ -134,12 +133,9 @@ func _physics_process(delta: float) -> void:
 		if velocity.y < 0.0:
 			velocity.y = 0.0
 
-	if is_on_floor() and _jump_requested:
-		if _standing_on_throwable:
-			_jump_requested = false
-		else:
-			velocity.y = jump_velocity
-			_jump_requested = false
+	if _jump_requested:
+		velocity.y = jump_velocity
+		_jump_requested = false
 
 	var dir2 := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A):
@@ -171,21 +167,6 @@ func _physics_process(delta: float) -> void:
 		_held.global_position = _hold_point.global_position
 		_held.linear_velocity = Vector3.ZERO
 		_held.angular_velocity = Vector3.ZERO
-
-	_standing_on_throwable = _is_standing_on_throwable_floor()
-
-
-func _is_standing_on_throwable_floor() -> bool:
-	if not is_on_floor():
-		return false
-	for i in get_slide_collision_count():
-		var c := get_slide_collision(i)
-		if c.get_normal().y < 0.52:
-			continue
-		var col := c.get_collider()
-		if col is RigidBody3D and col.is_in_group("throwable"):
-			return true
-	return false
 
 
 func _get_throwable_mesh(rb: RigidBody3D) -> MeshInstance3D:
