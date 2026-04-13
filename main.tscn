@@ -1,87 +1,83 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene format=3 uid="uid://cfmf2gvwovbox"]
 
-[ext_resource type="Script" path="res://player.gd" id="1_player"]
+[ext_resource type="Script" uid="uid://ccxh1c7bxjs0h" path="res://player.gd" id="1_player"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
 background_color = Color(0.1, 0.1, 0.12, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_floor"]
-size = Vector3(42, 0.25, 42)
+size = Vector3(120, 0.25, 120)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
 albedo_color = Color(0.34, 0.35, 0.38, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
-size = Vector3(42, 0.25, 42)
+size = Vector3(120, 0.25, 120)
 
 [sub_resource type="BoxMesh" id="BoxMesh_cube"]
-size = Vector3(1, 1, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cube"]
 albedo_color = Color(0.45, 0.65, 0.95, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_cube"]
-size = Vector3(1, 1, 1)
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
 height = 1.05
 
-[node name="Main" type="Node3D"]
+[node name="Main" type="Node3D" unique_id=1291999323]
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1258990413]
 environment = SubResource("Environment_main")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=657235490]
 transform = Transform3D(0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, -0.75, 0.433013, 2, 6, 3)
 light_energy = 1.15
 shadow_enabled = true
 
-[node name="FillLight" type="OmniLight3D" parent="."]
+[node name="FillLight" type="OmniLight3D" parent="." unique_id=492640163]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2.5, 2)
 light_color = Color(0.85, 0.9, 1, 1)
 light_energy = 0.35
-shadow_enabled = false
 
-[node name="Floor" type="StaticBody3D" parent="."]
+[node name="Floor" type="StaticBody3D" parent="." unique_id=946922387]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.125, 0)
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=917887440]
 mesh = SubResource("BoxMesh_floor")
 surface_material_override/0 = SubResource("StandardMaterial3D_floor")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=887709493]
 shape = SubResource("BoxShape3D_floor")
 
-[node name="Cube" type="RigidBody3D" parent="." groups=["throwable"]]
+[node name="Cube" type="RigidBody3D" parent="." unique_id=1848117914 groups=["throwable"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 1.5)
 continuous_cd = true
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Cube"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Cube" unique_id=376096829]
+transform = Transform3D(0.9999069, -0.006378199, -0.012063327, 0.006303191, 0.99996066, -0.0062472513, 0.012102689, 0.006170652, 0.99990773, 0, 0, 0)
 mesh = SubResource("BoxMesh_cube")
 surface_material_override/0 = SubResource("StandardMaterial3D_cube")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Cube"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Cube" unique_id=499372881]
 shape = SubResource("BoxShape3D_cube")
 
-[node name="Player" type="CharacterBody3D" parent="."]
+[node name="Player" type="CharacterBody3D" parent="." unique_id=2126005513]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, -1.5)
-floor_stop_on_slope = true
-floor_max_angle = 0.785398
 floor_snap_length = 0.12
 script = ExtResource("1_player")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=759851440]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.875, 0)
 shape = SubResource("CapsuleShape3D_player")
 
-[node name="CameraPivot" type="Node3D" parent="Player"]
+[node name="CameraPivot" type="Node3D" parent="Player" unique_id=1343884259]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.55, 0)
 
-[node name="Camera3D" type="Camera3D" parent="Player/CameraPivot"]
+[node name="Camera3D" type="Camera3D" parent="Player/CameraPivot" unique_id=1586870403]
 current = true
 fov = 65.0
 
-[node name="HoldPoint" type="Node3D" parent="Player/CameraPivot/Camera3D"]
+[node name="HoldPoint" type="Node3D" parent="Player/CameraPivot/Camera3D" unique_id=910191797]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, -1.05)
