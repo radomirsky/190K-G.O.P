@@ -24,6 +24,7 @@ var _throw_press_usec: int = -1
 var _standing_on_throwable: bool = false
 var _held_saved_collision_layer: int = 1
 var _held_saved_collision_mask: int = 1
+var _cubes_world_locked: bool = false
 
 
 func _ready() -> void:
@@ -70,6 +71,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
 			_spawn_throwable_cube()
+		if (
+			event.keycode == KEY_Z
+			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		):
+			_toggle_cubes_world_lock()
 		if event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			if _held:
 				_release_held()
@@ -155,6 +162,26 @@ func _spawn_throwable_cube() -> void:
 	cube.global_position = spawn_pos
 	cube.linear_velocity = Vector3.ZERO
 	cube.angular_velocity = Vector3.ZERO
+	if _cubes_world_locked:
+		cube.freeze = true
+
+
+func _toggle_cubes_world_lock() -> void:
+	_cubes_world_locked = not _cubes_world_locked
+	_apply_throwables_world_lock()
+
+
+func _apply_throwables_world_lock() -> void:
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if not node is RigidBody3D:
+			continue
+		var rb := node as RigidBody3D
+		if rb == _held:
+			continue
+		rb.freeze = _cubes_world_locked
+		if _cubes_world_locked:
+			rb.linear_velocity = Vector3.ZERO
+			rb.angular_velocity = Vector3.ZERO
 
 
 func _apply_body_pushes(move_velocity: Vector3) -> void:
@@ -206,7 +233,7 @@ func _release_held() -> void:
 		return
 	_held.collision_layer = _held_saved_collision_layer
 	_held.collision_mask = _held_saved_collision_mask
-	_held.freeze = false
+	_held.freeze = _cubes_world_locked
 	_held = null
 	_throw_press_usec = -1
 
