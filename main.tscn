@@ -173,6 +173,15 @@ surface_material_override/0 = SubResource("StandardMaterial3D_cube")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Cube" unique_id=499372881]
 shape = SubResource("BoxShape3D_cube")
 
+[node name="BrickLabel" type="Label3D" parent="Cube"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, 0.52)
+billboard = 1
+text = "КИРПИЧ"
+font_size = 44
+outline_size = 12
+outline_modulate = Color(0.04, 0.05, 0.1, 0.92)
+modulate = Color(1, 0.93, 0.76, 1)
+
 [node name="Player" type="CharacterBody3D" parent="." unique_id=2126005513]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, -1.5)
 floor_snap_length = 0.12
