@@ -18,6 +18,7 @@ const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 @export var glue_look_distance: float = 4.0
 @export var glue_pair_max_distance: float = 1.45
 @export var aim_ray_length: float = 48.0
+@export var look_key_speed: float = 1.85
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -59,6 +60,14 @@ func _restore_mouse_capture_after_focus() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+func _clamp_camera_pitch() -> void:
+	_camera_pivot.rotation.x = clampf(
+		_camera_pivot.rotation.x,
+		-PI / 2.0 + 0.02,
+		PI / 2.0 - 0.02
+	)
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		_jump_requested = true
@@ -74,14 +83,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-event.relative.x * mouse_sensitivity)
-		_camera_pivot.rotate_x(-event.relative.y * mouse_sensitivity)
-		_camera_pivot.rotation.x = clampf(
-			_camera_pivot.rotation.x,
-			-PI / 2.0 + 0.02,
-			PI / 2.0 - 0.02
-		)
+	if event is InputEventMouseMotion:
+		var can_look := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		if (
+			not can_look
+			and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+		):
+			can_look = true
+		if can_look:
+			rotate_y(-event.relative.x * mouse_sensitivity)
+			_camera_pivot.rotate_x(-event.relative.y * mouse_sensitivity)
+			_clamp_camera_pitch()
 
 	if (
 		event is InputEventMouseButton
@@ -175,6 +188,23 @@ func _physics_process(delta: float) -> void:
 	var move_vel := velocity
 	move_and_slide()
 	_apply_body_pushes(move_vel)
+
+	var lk := look_key_speed * delta
+	if Input.is_key_pressed(KEY_LEFT):
+		rotate_y(lk)
+	if Input.is_key_pressed(KEY_RIGHT):
+		rotate_y(-lk)
+	if Input.is_key_pressed(KEY_UP):
+		_camera_pivot.rotate_x(lk)
+	if Input.is_key_pressed(KEY_DOWN):
+		_camera_pivot.rotate_x(-lk)
+	if (
+		Input.is_key_pressed(KEY_LEFT)
+		or Input.is_key_pressed(KEY_RIGHT)
+		or Input.is_key_pressed(KEY_UP)
+		or Input.is_key_pressed(KEY_DOWN)
+	):
+		_clamp_camera_pitch()
 
 	if _held:
 		_held.global_position = _hold_point.global_position
