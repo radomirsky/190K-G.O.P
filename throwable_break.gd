@@ -1,7 +1,7 @@
 extends RigidBody3D
 
-@export var destroy_min_relative_speed: float = 1.15
-@export_range(1, 12, 1) var shatter_piece_count: int = 5
+@export var destroy_min_relative_speed: float = 0.0
+@export_range(2, 12, 1) var shatter_piece_count: int = 5
 @export var shatter_shard_size: float = 0.38
 @export var shatter_outward_impulse: float = 5.5
 @export var min_shard_size: float = 0.11
@@ -33,10 +33,13 @@ func _on_body_shape_entered(
 		call_deferred("_restore_velocity", keep)
 		return
 	var rel := linear_velocity.distance_to(other.linear_velocity)
-	if rel < destroy_min_relative_speed:
-		return
 	var v2 := linear_velocity.length_squared()
 	var o2 := other.linear_velocity.length_squared()
+	const REST2 := 1e-5
+	if v2 < REST2 and o2 < REST2 and rel < 0.001:
+		return
+	if destroy_min_relative_speed > 0.0 and rel < destroy_min_relative_speed:
+		return
 	const EPS := 1e-3
 	if v2 < o2 - EPS:
 		return
@@ -63,10 +66,48 @@ func _shatter_random_unit() -> Vector3:
 	return Vector3(randf_range(-1.0, 1.0), randf_range(-0.35, 1.0), randf_range(-1.0, 1.0)).normalized()
 
 
+func _spawn_final_crumbs() -> void:
+	var parent_node := get_parent()
+	if parent_node == null:
+		queue_free()
+		return
+	var p := global_position
+	var inherit_v := linear_velocity
+	var basis := global_transform.basis
+	var sz := maxf(shatter_shard_size * 0.55, 0.055)
+	var mat_col := Color(0.42, 0.62, 0.92, 1.0)
+	for i in 2:
+		var crumb := RigidBody3D.new()
+		crumb.name = "BrickCrumb_%d_%d" % [get_instance_id(), i]
+		crumb.mass = 0.04
+		crumb.continuous_cd = true
+		var mesh_i := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(sz, sz, sz)
+		mesh_i.mesh = bm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = mat_col
+		mesh_i.set_surface_override_material(0, mat)
+		var col := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(sz, sz, sz)
+		col.shape = bs
+		crumb.add_child(mesh_i)
+		crumb.add_child(col)
+		crumb.add_to_group("throwable")
+		parent_node.add_child(crumb)
+		crumb.global_position = p + basis * Vector3(randf_range(-0.12, 0.12), randf_range(-0.08, 0.12), randf_range(-0.12, 0.12))
+		crumb.linear_velocity = inherit_v * 0.35 + basis * _shatter_random_unit() * 2.8
+		crumb.angular_velocity = Vector3(
+			randf_range(-5.0, 5.0), randf_range(-5.0, 5.0), randf_range(-5.0, 5.0)
+		)
+
+
 func _shatter_and_free() -> void:
 	if not is_instance_valid(self):
 		return
 	if shatter_shard_size < min_shard_size or shatter_shard_size * 0.74 < min_shard_size:
+		_spawn_final_crumbs()
 		queue_free()
 		return
 	var parent_node := get_parent()
@@ -79,7 +120,7 @@ func _shatter_and_free() -> void:
 	var ang := angular_velocity
 	var basis := global_transform.basis
 	var sz := shatter_shard_size
-	var n: int = clampi(shatter_piece_count, 1, 12)
+	var n: int = clampi(shatter_piece_count, 2, 12)
 	var next_sz: float = maxf(sz * 0.74, min_shard_size * 0.95)
 	var child_n: int = clampi(maxi(2, n - 1), 2, 8)
 	if sz < 0.22:
