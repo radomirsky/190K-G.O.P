@@ -510,20 +510,6 @@ func _find_nearest_throwable(from_rb: RigidBody3D, max_dist: float) -> RigidBody
 	return best
 
 
-func _collect_cubes_for_humanoid() -> Array[RigidBody3D]:
-	var out: Array[RigidBody3D] = []
-	for node in get_tree().get_nodes_in_group("throwable"):
-		if not node is RigidBody3D:
-			continue
-		var rb := node as RigidBody3D
-		if rb == _held:
-			continue
-		if rb.name != "Cube":
-			continue
-		out.append(rb)
-	return out
-
-
 func _humanoid_floor_anchor() -> Vector3:
 	var flat_fwd := -global_transform.basis.z
 	flat_fwd.y = 0.0
@@ -545,37 +531,22 @@ func _humanoid_floor_anchor() -> Vector3:
 
 
 func _arrange_cubes_humanoid() -> void:
-	var cubes := _collect_cubes_for_humanoid()
-	if cubes.is_empty():
+	var scene := get_tree().current_scene
+	if scene == null:
 		return
 	var anchor := _humanoid_floor_anchor()
 	var yaw_basis := Basis.from_euler(Vector3(0.0, rotation.y, 0.0))
-	var targets: Array[Vector3] = []
 	for off in _HUMANOID_CUBE_LOCAL:
-		targets.append(anchor + yaw_basis * off)
-	var n_slots: int = mini(targets.size(), cubes.size())
-	var used: Dictionary = {}
-	for ti in range(n_slots):
-		var best_i := -1
-		var best_d2 := INF
-		for ci in range(cubes.size()):
-			if used.has(ci):
-				continue
-			var d2 := cubes[ci].global_position.distance_squared_to(targets[ti])
-			if d2 < best_d2:
-				best_d2 = d2
-				best_i = ci
-		if best_i < 0:
-			break
-		used[best_i] = true
-		var rb: RigidBody3D = cubes[best_i]
-		rb.linear_velocity = Vector3.ZERO
-		rb.angular_velocity = Vector3.ZERO
-		rb.global_rotation = Vector3.ZERO
-		rb.global_position = targets[ti]
-		rb.freeze = true
-		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
-		_update_throwable_visual(rb)
+		var world_pos := anchor + yaw_basis * off
+		var cube := THROWABLE_CUBE_SCENE.instantiate() as RigidBody3D
+		scene.add_child(cube)
+		cube.global_position = world_pos
+		cube.global_rotation = Vector3.ZERO
+		cube.linear_velocity = Vector3.ZERO
+		cube.angular_velocity = Vector3.ZERO
+		cube.freeze = true
+		cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+		_update_throwable_visual(cube)
 
 
 func _glue_joint_pair_exists(scene: Node, a: RigidBody3D, b: RigidBody3D) -> bool:
