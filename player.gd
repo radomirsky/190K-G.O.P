@@ -53,6 +53,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	if _held and is_instance_valid(_held):
+		_held.remove_from_group("held_throwable")
 		remove_collision_exception_with(_held)
 
 
@@ -532,6 +533,7 @@ func _try_pickup() -> void:
 	if collider == null:
 		return
 	_held = collider
+	_held.add_to_group("held_throwable")
 	add_collision_exception_with(_held)
 	_held.freeze = true
 	_held.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
@@ -543,6 +545,7 @@ func _release_held() -> void:
 	if not _held:
 		return
 	var body := _held
+	body.remove_from_group("held_throwable")
 	remove_collision_exception_with(body)
 	body.freeze = _cubes_world_locked
 	if _cubes_world_locked:
@@ -563,6 +566,7 @@ func _throw_held_charged() -> void:
 	var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
 	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
 	var impulse_dir := -_camera.global_transform.basis.z.normalized()
+	body.remove_from_group("held_throwable")
 	remove_collision_exception_with(body)
 	body.freeze = false
 	body.linear_velocity = impulse_dir * speed

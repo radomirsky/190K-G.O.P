@@ -1,7 +1,8 @@
-[gd_scene load_steps=13 format=3 uid="uid://cfmf2gvwovbox"]
+[gd_scene load_steps=14 format=3 uid="uid://cfmf2gvwovbox"]
 
 [ext_resource type="Script" uid="uid://ccxh1c7bxjs0h" path="res://player.gd" id="1_player"]
 [ext_resource type="Shader" path="res://floor_checker.gdshader" id="2_floor_shader"]
+[ext_resource type="Script" path="res://throwable_break.gd" id="3_throw_break"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -162,6 +163,7 @@ shape = SubResource("BoxShape3D_platform")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 1.5)
 mass = 0.85
 continuous_cd = true
+script = ExtResource("3_throw_break")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Cube" unique_id=376096829]
 transform = Transform3D(0.9999069, -0.006378199, -0.012063327, 0.006303191, 0.99996066, -0.0062472513, 0.012102689, 0.006170652, 0.99990773, 0, 0, 0)
