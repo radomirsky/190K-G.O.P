@@ -19,6 +19,7 @@ const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 @export var glue_pair_max_distance: float = 1.45
 @export var aim_ray_length: float = 48.0
 @export var look_key_speed: float = 1.85
+@export_range(0.0, 48.0, 0.25) var look_smoothing: float = 14.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -35,6 +36,8 @@ var _cubes_world_locked: bool = false
 var _want_mouse_captured: bool = true
 var _crosshair_layer: CanvasLayer = null
 var _hit_marker: MeshInstance3D = null
+var _look_yaw_target: float = 0.0
+var _look_pitch_target: float = 0.0
 
 
 func _ready() -> void:
@@ -46,6 +49,8 @@ func _ready() -> void:
 		if not win.focus_entered.is_connected(cb):
 			win.focus_entered.connect(cb)
 	call_deferred("_setup_aim_feedback")
+	_look_yaw_target = rotation.y
+	_look_pitch_target = _camera_pivot.rotation.x
 
 
 func _notification(what: int) -> void:
@@ -60,30 +65,37 @@ func _restore_mouse_capture_after_focus() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+func _pitch_limit() -> float:
+	return PI / 2.0 - 0.02
+
+
 func _clamp_camera_pitch() -> void:
-	_camera_pivot.rotation.x = clampf(
-		_camera_pivot.rotation.x,
-		-PI / 2.0 + 0.02,
-		PI / 2.0 - 0.02
-	)
+	var lim := _pitch_limit()
+	_camera_pivot.rotation.x = clampf(_camera_pivot.rotation.x, -lim, lim)
 
 
-func _apply_look_from_cursor() -> void:
+func _clamp_pitch_target(p: float) -> float:
+	var lim := _pitch_limit()
+	return clampf(p, -lim, lim)
+
+
+func _compute_cursor_look_targets() -> Vector2:
 	if _camera == null or not is_inside_tree():
-		return
+		return Vector2(_look_yaw_target, _look_pitch_target)
 	var mouse_pos := get_viewport().get_mouse_position()
 	var d := _camera.project_ray_normal(mouse_pos)
 	if d.length_squared() < 1e-10:
-		return
+		return Vector2(_look_yaw_target, _look_pitch_target)
 	d = d.normalized()
 	var horiz := Vector3(d.x, 0.0, d.z)
+	var target_yaw := _look_yaw_target
 	if horiz.length_squared() > 1e-10:
 		horiz = horiz.normalized()
-		rotation.y = atan2(horiz.x, -horiz.z)
-	var d_local := global_transform.basis.inverse() * d
-	var pitch := atan2(d_local.y, -d_local.z)
-	_camera_pivot.rotation.x = pitch
-	_clamp_camera_pitch()
+		target_yaw = atan2(horiz.x, -horiz.z)
+	var yaw_basis := Basis.from_euler(Vector3(0.0, target_yaw, 0.0))
+	var d_local := yaw_basis.inverse() * d
+	var target_pitch := _clamp_pitch_target(atan2(d_local.y, -d_local.z))
+	return Vector2(target_yaw, target_pitch)
 
 
 func _input(event: InputEvent) -> void:
@@ -99,13 +111,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_want_mouse_captured = true
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_look_yaw_target = rotation.y
+		_look_pitch_target = _camera_pivot.rotation.x
 		get_viewport().set_input_as_handled()
 
 	if event is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			rotate_y(-event.relative.x * mouse_sensitivity)
-			_camera_pivot.rotate_x(-event.relative.y * mouse_sensitivity)
-			_clamp_camera_pitch()
+			_look_yaw_target -= event.relative.x * mouse_sensitivity
+			_look_pitch_target = _clamp_pitch_target(
+				_look_pitch_target - event.relative.y * mouse_sensitivity
+			)
 
 	if (
 		event is InputEventMouseButton
@@ -202,24 +217,30 @@ func _physics_process(delta: float) -> void:
 	_apply_body_pushes(move_vel)
 
 	if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
-		_apply_look_from_cursor()
+		var t := _compute_cursor_look_targets()
+		_look_yaw_target = t.x
+		_look_pitch_target = t.y
 	else:
 		var lk := look_key_speed * delta
 		if Input.is_key_pressed(KEY_LEFT):
-			rotate_y(lk)
+			_look_yaw_target += lk
 		if Input.is_key_pressed(KEY_RIGHT):
-			rotate_y(-lk)
+			_look_yaw_target -= lk
 		if Input.is_key_pressed(KEY_UP):
-			_camera_pivot.rotate_x(lk)
+			_look_pitch_target = _clamp_pitch_target(_look_pitch_target + lk)
 		if Input.is_key_pressed(KEY_DOWN):
-			_camera_pivot.rotate_x(-lk)
-		if (
-			Input.is_key_pressed(KEY_LEFT)
-			or Input.is_key_pressed(KEY_RIGHT)
-			or Input.is_key_pressed(KEY_UP)
-			or Input.is_key_pressed(KEY_DOWN)
-		):
-			_clamp_camera_pitch()
+			_look_pitch_target = _clamp_pitch_target(_look_pitch_target - lk)
+
+	var smooth_k := 1.0
+	if look_smoothing > 0.0:
+		smooth_k = 1.0 - exp(-look_smoothing * delta)
+	rotation.y = lerp_angle(rotation.y, _look_yaw_target, smooth_k)
+	_camera_pivot.rotation.x = lerpf(
+		_camera_pivot.rotation.x,
+		_look_pitch_target,
+		smooth_k
+	)
+	_clamp_camera_pitch()
 
 	if _held:
 		_held.global_position = _hold_point.global_position
