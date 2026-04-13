@@ -4,7 +4,7 @@ extends RigidBody3D
 @export_range(1, 12, 1) var shatter_piece_count: int = 5
 @export var shatter_shard_size: float = 0.38
 @export var shatter_outward_impulse: float = 5.5
-@export var debris_lifetime_sec: float = 7.0
+@export var min_shard_size: float = 0.11
 
 func _ready() -> void:
 	contact_monitor = true
@@ -45,7 +45,9 @@ func _on_body_shape_entered(
 			return
 	var keep_v := linear_velocity
 	if is_instance_valid(other):
-		if other.name == "Cube":
+		if other.has_method("_shatter_and_free") and (
+			other.name == "Cube" or other.name.begins_with("BrickShard")
+		):
 			other.call_deferred("_shatter_and_free")
 		else:
 			other.call_deferred("queue_free")
@@ -64,31 +66,46 @@ func _shatter_random_unit() -> Vector3:
 func _shatter_and_free() -> void:
 	if not is_instance_valid(self):
 		return
+	if shatter_shard_size < min_shard_size or shatter_shard_size * 0.74 < min_shard_size:
+		queue_free()
+		return
 	var parent_node := get_parent()
 	if parent_node == null:
 		queue_free()
 		return
+	var scr: Script = load("res://throwable_break.gd") as Script
 	var p := global_position
 	var inherit_v := linear_velocity
 	var ang := angular_velocity
 	var basis := global_transform.basis
 	var sz := shatter_shard_size
 	var n: int = clampi(shatter_piece_count, 1, 12)
+	var next_sz: float = maxf(sz * 0.74, min_shard_size * 0.95)
+	var child_n: int = clampi(maxi(2, n - 1), 2, 8)
+	if sz < 0.22:
+		child_n = clampi(maxi(2, n - 2), 2, 6)
+	var mass_scale := powf(next_sz / 0.38, 3.0)
 	for i in n:
 		var shard := RigidBody3D.new()
+		shard.set_script(scr)
 		shard.name = "BrickShard_%d_%d" % [get_instance_id(), i]
-		shard.mass = 0.11
+		shard.shatter_shard_size = next_sz
+		shard.shatter_piece_count = child_n
+		shard.min_shard_size = min_shard_size
+		shard.destroy_min_relative_speed = destroy_min_relative_speed
+		shard.shatter_outward_impulse = shatter_outward_impulse * 0.9
+		shard.mass = clampf(0.11 * mass_scale, 0.03, 0.85)
 		shard.continuous_cd = true
 		var mesh_i := MeshInstance3D.new()
 		var bm := BoxMesh.new()
-		bm.size = Vector3(sz, sz, sz)
+		bm.size = Vector3(next_sz, next_sz, next_sz)
 		mesh_i.mesh = bm
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.42, 0.62, 0.92, 1.0)
 		mesh_i.set_surface_override_material(0, mat)
 		var col := CollisionShape3D.new()
 		var bs := BoxShape3D.new()
-		bs.size = Vector3(sz, sz, sz)
+		bs.size = Vector3(next_sz, next_sz, next_sz)
 		col.shape = bs
 		shard.add_child(mesh_i)
 		shard.add_child(col)
@@ -105,16 +122,4 @@ func _shatter_and_free() -> void:
 		shard.angular_velocity = Vector3(
 			randf_range(-6.0, 6.0), randf_range(-6.0, 6.0), randf_range(-6.0, 6.0)
 		)
-		if debris_lifetime_sec > 0.05:
-			var life := Timer.new()
-			life.name = "DebrisLife"
-			life.wait_time = debris_lifetime_sec
-			life.one_shot = true
-			shard.add_child(life)
-			life.timeout.connect(
-				func() -> void:
-					if is_instance_valid(shard):
-						shard.queue_free()
-			)
-			life.start()
 	queue_free()
