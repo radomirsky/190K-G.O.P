@@ -86,7 +86,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		):
 			_unlock_cubes_world()
 		if (
-			event.keycode == KEY_C
+			event.keycode == KEY_B
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		):
