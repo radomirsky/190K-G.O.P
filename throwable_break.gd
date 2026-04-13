@@ -92,6 +92,7 @@ func _shatter_and_free() -> void:
 		col.shape = bs
 		shard.add_child(mesh_i)
 		shard.add_child(col)
+		shard.add_to_group("throwable")
 		parent_node.add_child(shard)
 		shard.global_position = (
 			p
@@ -105,10 +106,15 @@ func _shatter_and_free() -> void:
 			randf_range(-6.0, 6.0), randf_range(-6.0, 6.0), randf_range(-6.0, 6.0)
 		)
 		if debris_lifetime_sec > 0.05:
-			var t := get_tree().create_timer(debris_lifetime_sec)
-			t.timeout.connect(
+			var life := Timer.new()
+			life.name = "DebrisLife"
+			life.wait_time = debris_lifetime_sec
+			life.one_shot = true
+			shard.add_child(life)
+			life.timeout.connect(
 				func() -> void:
 					if is_instance_valid(shard):
 						shard.queue_free()
 			)
+			life.start()
 	queue_free()

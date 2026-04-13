@@ -621,6 +621,10 @@ func _try_pickup() -> void:
 	var collider := _raycast_aimed_throwable(pickup_distance)
 	if collider == null:
 		return
+	var debris_timer := collider.get_node_or_null("DebrisLife")
+	if debris_timer is Timer:
+		(debris_timer as Timer).stop()
+		debris_timer.queue_free()
 	_held = collider
 	_held.add_to_group("held_throwable")
 	add_collision_exception_with(_held)
