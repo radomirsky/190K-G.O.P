@@ -6,6 +6,8 @@ extends RigidBody3D
 @export var shatter_outward_impulse: float = 5.5
 @export var min_shard_size: float = 0.11
 @export_range(1, 2, 1) var final_crumb_count: int = 2
+## Если >= 2, осколки при следующем ударе тоже делятся на столько кусков (один раз), затем снова обычная формула.
+@export_range(0, 12, 1) var next_level_piece_count: int = 0
 
 func _ready() -> void:
 	contact_monitor = true
@@ -123,9 +125,13 @@ func _shatter_and_free() -> void:
 	var sz := shatter_shard_size
 	var n: int = clampi(shatter_piece_count, 2, 12)
 	var next_sz: float = maxf(sz * 0.64, min_shard_size * 0.95)
-	var child_n: int = clampi(maxi(2, n - 1), 2, 8)
-	if sz < 0.22:
-		child_n = clampi(maxi(2, n - 2), 2, 6)
+	var child_n: int
+	if next_level_piece_count >= 2:
+		child_n = clampi(next_level_piece_count, 2, 12)
+	else:
+		child_n = clampi(maxi(2, n - 1), 2, 8)
+		if sz < 0.22:
+			child_n = clampi(maxi(2, n - 2), 2, 6)
 	var mass_scale := pow(next_sz / 0.38, 3.0)
 	for i in n:
 		var shard := RigidBody3D.new()
@@ -133,6 +139,7 @@ func _shatter_and_free() -> void:
 		shard.name = "BrickShard_%d_%d" % [get_instance_id(), i]
 		shard.shatter_shard_size = next_sz
 		shard.shatter_piece_count = child_n
+		shard.next_level_piece_count = 0
 		shard.min_shard_size = min_shard_size
 		shard.final_crumb_count = final_crumb_count
 		shard.destroy_min_relative_speed = destroy_min_relative_speed
