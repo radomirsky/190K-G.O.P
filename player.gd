@@ -459,7 +459,8 @@ func _enlarge_pick_ray_distance() -> float:
 	return maxf(cube_enlarge_ray_distance, aim_ray_length)
 
 
-func _count_cubes_at_full_enlarge() -> int:
+## Кубы с карты (без _player_spawned): не больше max_cubes_at_full_enlarge на пределе. Кубы Shift+Q / человекоид не участвуют в этом лимите и могут вырасти до cube_enlarge_max_scale, как кирпич на сцене.
+func _count_map_cubes_at_full_enlarge() -> int:
 	var n := 0
 	var lim := cube_enlarge_max_scale
 	const EPS := 0.03
@@ -468,6 +469,8 @@ func _count_cubes_at_full_enlarge() -> int:
 			continue
 		var rb := node as RigidBody3D
 		if not _is_enlargeable_brick_box(rb):
+			continue
+		if rb.get_meta("_player_spawned", false):
 			continue
 		var m := float(rb.get_meta("_cube_scale_mul", 1.0))
 		if m >= lim - EPS:
@@ -510,12 +513,10 @@ func _enlarge_would_apply(rb: RigidBody3D) -> bool:
 	const EPS := 0.03
 	var was_below_full := mul < cube_enlarge_max_scale - EPS
 	var hits_full := new_mul >= cube_enlarge_max_scale - EPS
-	if (
-		was_below_full
-		and hits_full
-		and _count_cubes_at_full_enlarge() >= max_cubes_at_full_enlarge
-	):
-		return false
+	if was_below_full and hits_full:
+		if not rb.get_meta("_player_spawned", false):
+			if _count_map_cubes_at_full_enlarge() >= max_cubes_at_full_enlarge:
+				return false
 	return true
 
 
@@ -627,6 +628,7 @@ func _spawn_throwable_cube() -> void:
 	var spawn_pos := global_position + forward * cube_spawn_distance
 	spawn_pos.y = global_position.y + 0.5
 	cube.set_meta("_player_spawned", true)
+	cube.set_meta("_cube_scale_mul", 1.0)
 	scene.add_child(cube)
 	cube.global_position = spawn_pos
 	cube.linear_velocity = Vector3.ZERO
