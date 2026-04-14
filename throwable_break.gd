@@ -30,6 +30,8 @@ func _on_body_shape_entered(
 ) -> void:
 	if is_in_group("held_throwable"):
 		return
+	if not ThrowablesBudget.brick_shattering_enabled:
+		return
 	if not body is RigidBody3D:
 		return
 	if not body.is_in_group("throwable"):

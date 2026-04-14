@@ -2,6 +2,9 @@ extends Node
 
 const MAX_THROWABLES: int = 500
 
+## Если false, кирпичи (Cube / BrickShard) не разлетаются при столкновениях.
+var brick_shattering_enabled: bool = true
+
 var _fifo: Array[RigidBody3D] = []
 
 

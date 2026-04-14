@@ -195,6 +195,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if (
 			event.keycode == KEY_Q
+			and (event.ctrl_pressed or Input.is_key_pressed(KEY_CTRL))
+			and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+		):
+			ThrowablesBudget.brick_shattering_enabled = (
+				not ThrowablesBudget.brick_shattering_enabled
+			)
+			get_viewport().set_input_as_handled()
+		elif (
+			event.keycode == KEY_Q
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and _world_actions_input_ok()
 		):
