@@ -146,6 +146,7 @@ func _throw_aim_dir() -> Vector3:
 func _is_use_key(event: InputEventKey) -> bool:
 	if not event.pressed or event.echo:
 		return false
+	# keycode — по раскладке; physical_keycode — физическая клавиша как на QWERTY (удобно при RU)
 	return event.keycode == KEY_E or event.physical_keycode == KEY_E
 
 
@@ -418,7 +419,33 @@ func _raycast_aimed_enlarge_box(max_dist: float) -> RigidBody3D:
 	var rb := _raycast_aimed_throwable(max_dist)
 	if rb != null and _is_enlargeable_brick_box(rb):
 		return rb
-	return null
+	return _nearest_enlargeable_box_on_aim(max_dist)
+
+
+func _nearest_enlargeable_box_on_aim(max_dist: float) -> RigidBody3D:
+	var ad := _aim_ray_from_dir()
+	var o: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var best: RigidBody3D = null
+	var best_t := INF
+	const MAX_SEP := 1.45
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if not node is RigidBody3D:
+			continue
+		var cand := node as RigidBody3D
+		if cand == _held or not _is_enlargeable_brick_box(cand):
+			continue
+		var rel := cand.global_position - o
+		var t := rel.dot(dir)
+		if t < 0.15 or t > max_dist:
+			continue
+		var perp2 := rel.length_squared() - t * t
+		if perp2 > MAX_SEP * MAX_SEP:
+			continue
+		if best == null or t < best_t:
+			best_t = t
+			best = cand
+	return best
 
 
 func _enlarge_pick_ray_distance() -> float:
@@ -636,7 +663,12 @@ func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:
 	var to := from + dir * max_dist
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
-	query.exclude = [get_rid()]
+	query.collide_with_bodies = true
+	query.hit_from_inside = true
+	var excl: Array[RID] = [get_rid()]
+	if _held != null and is_instance_valid(_held):
+		excl.append(_held.get_rid())
+	query.exclude = excl
 	var hit: Dictionary = space.intersect_ray(query)
 	if hit.is_empty() or not hit.has("collider"):
 		return null
