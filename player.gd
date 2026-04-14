@@ -45,7 +45,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export_range(40.0, 120.0, 0.5) var camera_fov: float = 65.0
 @export var max_hp: int = 100
 @export var enemy_touch_damage: int = 8
-@export var enemy_touch_cooldown_sec: float = 0.35
+@export var damage_invuln_sec: float = 1.35
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -157,7 +157,7 @@ func take_damage(amount: int) -> void:
 		return
 	if _hp_cd > 0.0:
 		return
-	_hp_cd = enemy_touch_cooldown_sec
+	_hp_cd = damage_invuln_sec
 	_hp = clampi(_hp - amount, 0, max_hp)
 	_update_hp_ui()
 
