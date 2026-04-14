@@ -371,7 +371,11 @@ func _is_use_key(event: InputEventKey) -> bool:
 
 func _world_actions_input_ok() -> bool:
 	var m := Input.mouse_mode
-	return m == Input.MOUSE_MODE_CAPTURED or m == Input.MOUSE_MODE_VISIBLE
+	return (
+		m == Input.MOUSE_MODE_CAPTURED
+		or m == Input.MOUSE_MODE_VISIBLE
+		or m == Input.MOUSE_MODE_CONFINED
+	)
 
 
 func _input(event: InputEvent) -> void:
@@ -389,6 +393,36 @@ func _input(event: InputEvent) -> void:
 			_look_pitch_target = _clamp_pitch_target(
 				_look_pitch_target - event.relative.y * mouse_sensitivity
 			)
+	# ЛКМ: стрельба из пушки (G) или стазиса (F), иначе — метание удерживаемого (как раньше).
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if not _world_actions_input_ok():
+			return
+		if event.pressed:
+			if _equipped == EquippedGun.PYRAMID and _gun_cd <= 0.0 and _gun_ammo > 0:
+				_cancel_gun_finish_reload_anim()
+				_fire_gun_pyramid()
+				_gun_cd = gun_fire_cooldown_sec
+				_gun_ammo -= 1
+				if _gun_ammo < gun_mag_size:
+					_gun_refill_wait = gun_full_refill_delay_sec
+				_update_hp_ui()
+				get_viewport().set_input_as_handled()
+				return
+			if _equipped == EquippedGun.STASIS and _stasis_cd <= 0.0 and _stasis_ammo > 0:
+				_cancel_stasis_reload_anim()
+				_fire_stasis_ring()
+				_stasis_cd = stasis_fire_cooldown_sec
+				_stasis_ammo -= 1
+				if _stasis_ammo < stasis_mag_size:
+					_stasis_refill_wait = stasis_refill_delay_sec
+				_update_hp_ui()
+				get_viewport().set_input_as_handled()
+				return
+			if _held:
+				_throw_press_usec = Time.get_ticks_usec()
+		else:
+			if _held and _throw_press_usec >= 0:
+				_throw_held_charged()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -399,48 +433,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_look_yaw_target = rotation.y
 		_look_pitch_target = _camera_pivot.rotation.x
 		get_viewport().set_input_as_handled()
-
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if (
-			Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
-		):
-			if event.pressed:
-				if (
-					_equipped == EquippedGun.PYRAMID
-					and _gun_cd <= 0.0
-					and _gun_ammo > 0
-					and _world_actions_input_ok()
-				):
-					_cancel_gun_finish_reload_anim()
-					_fire_gun_pyramid()
-					_gun_cd = gun_fire_cooldown_sec
-					_gun_ammo -= 1
-					if _gun_ammo < gun_mag_size:
-						_gun_refill_wait = gun_full_refill_delay_sec
-					_update_hp_ui()
-					get_viewport().set_input_as_handled()
-					return
-				if (
-					_equipped == EquippedGun.STASIS
-					and _stasis_cd <= 0.0
-					and _stasis_ammo > 0
-					and _world_actions_input_ok()
-				):
-					_cancel_stasis_reload_anim()
-					_fire_stasis_ring()
-					_stasis_cd = stasis_fire_cooldown_sec
-					_stasis_ammo -= 1
-					if _stasis_ammo < stasis_mag_size:
-						_stasis_refill_wait = stasis_refill_delay_sec
-					_update_hp_ui()
-					get_viewport().set_input_as_handled()
-					return
-				if _held:
-					_throw_press_usec = Time.get_ticks_usec()
-			else:
-				if _held and _throw_press_usec >= 0:
-					_throw_held_charged()
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SHIFT and event.location == KEY_LOCATION_LEFT:
