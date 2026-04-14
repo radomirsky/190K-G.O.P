@@ -58,6 +58,7 @@ func _ready() -> void:
 		_camera.fov = camera_fov
 	_want_mouse_captured = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_center_mouse_in_viewport()
 	var win := get_window()
 	if win:
 		var cb := Callable(self, "_restore_mouse_capture_after_focus")
@@ -84,6 +85,27 @@ func _restore_mouse_capture_after_focus() -> void:
 		return
 	if _want_mouse_captured:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_center_mouse_in_viewport()
+
+
+func _center_mouse_in_viewport() -> void:
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var r := vp.get_visible_rect()
+	vp.warp_mouse(r.position + r.size * 0.5)
+
+
+func _process(_delta: float) -> void:
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED or not _want_mouse_captured:
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var r := vp.get_visible_rect()
+	var center := r.position + r.size * 0.5
+	if vp.get_mouse_position().distance_squared_to(center) > 4.0:
+		vp.warp_mouse(center)
 
 
 func _pitch_limit() -> float:
@@ -139,9 +161,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			_want_mouse_captured = false
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			_center_mouse_in_viewport()
 		else:
 			_want_mouse_captured = true
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			_center_mouse_in_viewport()
 		_look_yaw_target = rotation.y
 		_look_pitch_target = _camera_pivot.rotation.x
 		get_viewport().set_input_as_handled()
