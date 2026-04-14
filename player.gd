@@ -36,6 +36,9 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var gun_fire_cooldown_sec: float = 0.12
 @export var gun_mag_size: int = 10
 @export var gun_reload_sec: float = 3.0
+@export var dash_speed: float = 14.5
+@export var dash_duration_sec: float = 0.14
+@export var dash_cooldown_sec: float = 0.7
 @export var cube_enlarge_factor: float = 1.15
 @export var cube_enlarge_max_scale: float = 5.0
 @export_range(1, 64, 1) var max_cubes_at_full_enlarge: int = 5
@@ -68,6 +71,9 @@ var _gun_node: Node3D = null
 var _gun_muzzle: Node3D = null
 var _gun_ammo: int = 10
 var _gun_reload: float = 0.0
+var _dash_t: float = 0.0
+var _dash_cd: float = 0.0
+var _dash_dir: Vector3 = Vector3.ZERO
 var _cubes_world_locked: bool = false
 var _want_mouse_captured: bool = true
 var _crosshair_layer: CanvasLayer = null
@@ -139,6 +145,7 @@ func _process(_delta: float) -> void:
 	_gun_reload = maxf(_gun_reload - _delta, 0.0)
 	if _gun_reload <= 0.0 and _gun_ammo <= 0:
 		_gun_ammo = gun_mag_size
+	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
 	_update_hp_ui()
@@ -301,6 +308,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					_throw_held_charged()
 
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SHIFT and event.location == KEY_LOCATION_LEFT:
+			_try_dash()
+			get_viewport().set_input_as_handled()
 		if (
 			(event.keycode == KEY_C or event.physical_keycode == KEY_C)
 			and _world_actions_input_ok()
@@ -381,6 +391,33 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				_try_pickup()
 			get_viewport().set_input_as_handled()
+
+func _try_dash() -> void:
+	if _dash_cd > 0.0 or _dash_t > 0.0:
+		return
+	if not is_on_floor():
+		return
+	var dir2 := Vector2.ZERO
+	if Input.is_physical_key_pressed(KEY_A):
+		dir2.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_D):
+		dir2.x += 1.0
+	if Input.is_physical_key_pressed(KEY_W):
+		dir2.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_S):
+		dir2.y += 1.0
+	var dir := Vector3.ZERO
+	if dir2.length_squared() > 0.0:
+		dir2 = dir2.normalized()
+		dir = (transform.basis * Vector3(dir2.x, 0.0, dir2.y)).normalized()
+	else:
+		dir = -global_transform.basis.z
+		dir.y = 0.0
+		if dir.length_squared() > 0.0001:
+			dir = dir.normalized()
+	_dash_dir = dir
+	_dash_t = dash_duration_sec
+	_dash_cd = dash_cooldown_sec
 
 
 func _clear_world_objects() -> void:
@@ -485,8 +522,13 @@ func _physics_process(delta: float) -> void:
 			direction = direction.normalized()
 
 	var target_xz := direction * move_speed
-	velocity.x = target_xz.x
-	velocity.z = target_xz.z
+	if _dash_t > 0.0:
+		_dash_t = maxf(_dash_t - delta, 0.0)
+		velocity.x = _dash_dir.x * dash_speed
+		velocity.z = _dash_dir.z * dash_speed
+	else:
+		velocity.x = target_xz.x
+		velocity.z = target_xz.z
 
 	var move_vel := velocity
 	move_and_slide()
