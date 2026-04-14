@@ -34,7 +34,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var glue_pair_max_distance: float = 1.45
 @export var humanoid_spawn_forward: float = 3.5
 @export var gun_pyramid_speed: float = 26.0
-@export var gun_fire_cooldown_sec: float = 0.12
+@export var gun_fire_cooldown_sec: float = 6.0
 @export var gun_mag_size: int = 10
 ## После любого выстрола, пока магазин не полон: через столько секунд патроны восстанавливаются целиком (таймер сбрасывается при каждом новом выстреле).
 @export_range(0.4, 4.0, 0.05) var gun_full_refill_delay_sec: float = 1.5
