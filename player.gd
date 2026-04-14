@@ -31,6 +31,9 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var glue_look_distance: float = 4.0
 @export var glue_pair_max_distance: float = 1.45
 @export var humanoid_spawn_forward: float = 3.5
+@export var cube_enlarge_factor: float = 1.15
+@export var cube_enlarge_max_scale: float = 4.0
+@export var cube_enlarge_ray_distance: float = 5.0
 @export var aim_ray_length: float = 48.0
 @export var look_key_speed: float = 1.85
 @export_range(0.0, 48.0, 0.25) var look_smoothing: float = 14.0
@@ -237,12 +240,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		):
 			_try_glue_throwable_cubes()
 			get_viewport().set_input_as_handled()
+		elif (
+			_is_use_key(event)
+			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and _world_actions_input_ok()
+		):
+			if _try_enlarge_cube():
+				get_viewport().set_input_as_handled()
+			elif _held:
+				_release_held()
+				get_viewport().set_input_as_handled()
 		elif _is_use_key(event):
 			if _held:
-				if event.shift_pressed:
-					_release_held()
-				else:
-					_throw_held_tap()
+				_throw_held_tap()
 			else:
 				_try_pickup()
 			get_viewport().set_input_as_handled()
@@ -389,6 +399,57 @@ func _update_aim_feedback() -> void:
 
 func _get_throwable_mesh(rb: RigidBody3D) -> MeshInstance3D:
 	return rb.get_node_or_null("MeshInstance3D") as MeshInstance3D
+
+
+func _raycast_aimed_cube(max_dist: float) -> RigidBody3D:
+	var rb := _raycast_aimed_throwable(max_dist)
+	if rb != null and rb.name == "Cube":
+		return rb
+	return null
+
+
+func _try_enlarge_cube() -> bool:
+	var rb: RigidBody3D = null
+	if _held and _held.name == "Cube":
+		rb = _held
+	else:
+		rb = _raycast_aimed_cube(cube_enlarge_ray_distance)
+	if rb == null:
+		return false
+	_enlarge_cube(rb)
+	return true
+
+
+func _enlarge_cube(rb: RigidBody3D) -> void:
+	if rb == null or not is_instance_valid(rb) or rb.name != "Cube":
+		return
+	var mul: float = float(rb.get_meta("_cube_scale_mul", 1.0))
+	var new_mul := minf(mul * cube_enlarge_factor, cube_enlarge_max_scale)
+	var ratio := new_mul / mul
+	if ratio <= 1.0001:
+		return
+	rb.set_meta("_cube_scale_mul", new_mul)
+
+	var mesh_i := _get_throwable_mesh(rb)
+	var col_n := rb.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if mesh_i and mesh_i.mesh is BoxMesh:
+		var bm := (mesh_i.mesh as BoxMesh).duplicate() as BoxMesh
+		bm.size *= ratio
+		mesh_i.mesh = bm
+	if col_n and col_n.shape is BoxShape3D:
+		var bs := (col_n.shape as BoxShape3D).duplicate() as BoxShape3D
+		bs.size *= ratio
+		col_n.shape = bs
+
+	rb.mass *= pow(ratio, 3.0)
+	if rb.has_method("_shatter_and_free"):
+		rb.shatter_shard_size *= ratio
+		rb.min_shard_size *= ratio
+
+	var label := rb.get_node_or_null("BrickLabel") as Node3D
+	if label:
+		label.position *= ratio
+	_refresh_all_throwable_visuals()
 
 
 func _ensure_throwable_material(mesh: MeshInstance3D) -> StandardMaterial3D:
