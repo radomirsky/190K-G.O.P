@@ -43,6 +43,9 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var look_key_speed: float = 1.85
 @export_range(0.0, 48.0, 0.25) var look_smoothing: float = 14.0
 @export_range(40.0, 120.0, 0.5) var camera_fov: float = 65.0
+@export var max_hp: int = 100
+@export var enemy_touch_damage: int = 8
+@export var enemy_touch_cooldown_sec: float = 0.35
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -67,6 +70,10 @@ var _crosshair_layer: CanvasLayer = null
 var _hit_marker: MeshInstance3D = null
 var _look_yaw_target: float = 0.0
 var _look_pitch_target: float = 0.0
+var _hp: int = 100
+var _hp_cd: float = 0.0
+var _hp_layer: CanvasLayer = null
+var _hp_label: Label = null
 
 
 func _ready() -> void:
@@ -81,8 +88,10 @@ func _ready() -> void:
 		if not win.focus_entered.is_connected(cb):
 			win.focus_entered.connect(cb)
 	call_deferred("_setup_aim_feedback")
+	call_deferred("_setup_hp_ui")
 	_look_yaw_target = rotation.y
 	_look_pitch_target = _camera_pivot.rotation.x
+	_hp = max_hp
 
 
 func _exit_tree() -> void:
@@ -121,6 +130,36 @@ func _process(_delta: float) -> void:
 	var r := vp.get_visible_rect()
 	vp.warp_mouse(r.position + r.size * 0.5)
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
+	_hp_cd = maxf(_hp_cd - _delta, 0.0)
+
+
+func _setup_hp_ui() -> void:
+	if _hp_layer != null:
+		return
+	_hp_layer = CanvasLayer.new()
+	_hp_layer.layer = 101
+	add_child(_hp_layer)
+	_hp_label = Label.new()
+	_hp_label.text = ""
+	_hp_label.position = Vector2(16, 14)
+	_hp_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	_hp_layer.add_child(_hp_label)
+	_update_hp_ui()
+
+
+func _update_hp_ui() -> void:
+	if _hp_label:
+		_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
+
+
+func take_damage(amount: int) -> void:
+	if amount <= 0:
+		return
+	if _hp_cd > 0.0:
+		return
+	_hp_cd = enemy_touch_cooldown_sec
+	_hp = clampi(_hp - amount, 0, max_hp)
+	_update_hp_ui()
 
 
 func _pitch_limit() -> float:
