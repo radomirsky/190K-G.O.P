@@ -16,6 +16,12 @@ func _ready() -> void:
 		body_shape_entered.connect(_on_body_shape_entered)
 
 
+func _is_shatter_brick(rb: RigidBody3D) -> bool:
+	return rb.has_method("_shatter_and_free") and (
+		rb.name == "Cube" or rb.name.begins_with("BrickShard")
+	)
+
+
 func _on_body_shape_entered(
 	_body_rid: RID,
 	body: Node,
@@ -35,26 +41,29 @@ func _on_body_shape_entered(
 		var keep := linear_velocity
 		call_deferred("_restore_velocity", keep)
 		return
+	var self_brick := _is_shatter_brick(self)
+	var other_brick := _is_shatter_brick(other)
+	var both_bricks := self_brick and other_brick
 	var rel := linear_velocity.distance_to(other.linear_velocity)
 	var sp := linear_velocity.length()
 	var op := other.linear_velocity.length()
 	const IDLE_SPD := 0.02
 	const IDLE_REL := 0.035
-	if sp < IDLE_SPD and op < IDLE_SPD and rel < IDLE_REL:
-		return
-	if destroy_min_relative_speed > 0.0 and rel < destroy_min_relative_speed:
-		return
+	if not both_bricks:
+		if sp < IDLE_SPD and op < IDLE_SPD and rel < IDLE_REL:
+			return
+		if destroy_min_relative_speed > 0.0 and rel < destroy_min_relative_speed:
+			return
 	if get_instance_id() < other.get_instance_id():
 		return
 	if is_instance_valid(other):
-		if other.has_method("_shatter_and_free") and (
-			other.name == "Cube" or other.name.begins_with("BrickShard")
-		):
+		if other_brick:
 			other.call_deferred("_shatter_and_free")
 		elif other.is_in_group("throwable"):
 			other.call_deferred("queue_free")
-	if has_method("_shatter_and_free") and (name == "Cube" or name.begins_with("BrickShard")):
-		call_deferred("_shatter_and_free")
+	if self_brick:
+		if not both_bricks:
+			call_deferred("_shatter_and_free")
 	elif is_in_group("throwable"):
 		call_deferred("queue_free")
 
