@@ -147,6 +147,19 @@ func _take_hit(amount: int = 1) -> void:
 		_die_scatter()
 
 
+## Стазис: урон без окна неуязвимости и без отсечения по _break_cd (см. _on_break_area_body_entered).
+func _take_stasis_hit(amount: int) -> void:
+	if _dead:
+		return
+	if amount < 1:
+		amount = 1
+	_flash = hit_flash_sec
+	_set_humanoid_color(hit_flash_color)
+	_hp -= amount
+	if _hp <= 0:
+		_die_scatter()
+
+
 func _die_scatter() -> void:
 	if _dead:
 		return
@@ -209,12 +222,13 @@ func _die_scatter() -> void:
 
 
 func _on_break_area_body_entered(body: Node) -> void:
-	if _break_cd > 0.0:
-		return
 	if not body is RigidBody3D:
 		return
 	var rb := body as RigidBody3D
 	if not rb.is_in_group("throwable"):
+		return
+	var is_stasis_proj := rb.name == "StasisRing"
+	if not is_stasis_proj and _break_cd > 0.0:
 		return
 
 	# Попали кубом в врага — враг разваливается.
@@ -224,7 +238,8 @@ func _on_break_area_body_entered(body: Node) -> void:
 		or rb.name == "Pyramid"
 		or rb.name == "StasisRing"
 	):
-		_break_cd = break_cooldown_sec
+		if not is_stasis_proj:
+			_break_cd = break_cooldown_sec
 		# Снаряд НЕ ломаем — только убиваем врага.
 		# Можно чуть "отпружинить" куб от врага, чтобы было ощущение удара.
 		if is_instance_valid(rb):
@@ -239,9 +254,10 @@ func _on_break_area_body_entered(body: Node) -> void:
 		var dmg: int
 		if rb.name == "StasisRing":
 			dmg = maxi(1, stasis_hit_damage)
+			call_deferred("_take_stasis_hit", dmg)
 		else:
 			dmg = _compute_hit_damage_from_player()
-		call_deferred("_take_hit", dmg)
+			call_deferred("_take_hit", dmg)
 		return
 
 	# Враг ломает твои кубы рядом.
