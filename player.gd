@@ -34,6 +34,8 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var humanoid_spawn_forward: float = 3.5
 @export var gun_pyramid_speed: float = 26.0
 @export var gun_fire_cooldown_sec: float = 0.12
+@export var gun_mag_size: int = 10
+@export var gun_reload_sec: float = 3.0
 @export var cube_enlarge_factor: float = 1.15
 @export var cube_enlarge_max_scale: float = 5.0
 @export_range(1, 64, 1) var max_cubes_at_full_enlarge: int = 5
@@ -64,6 +66,8 @@ var _gun_enabled: bool = false
 var _gun_cd: float = 0.0
 var _gun_node: Node3D = null
 var _gun_muzzle: Node3D = null
+var _gun_ammo: int = 10
+var _gun_reload: float = 0.0
 var _cubes_world_locked: bool = false
 var _want_mouse_captured: bool = true
 var _crosshair_layer: CanvasLayer = null
@@ -92,6 +96,7 @@ func _ready() -> void:
 	_look_yaw_target = rotation.y
 	_look_pitch_target = _camera_pivot.rotation.x
 	_hp = max_hp
+	_gun_ammo = gun_mag_size
 
 
 func _exit_tree() -> void:
@@ -130,6 +135,9 @@ func _process(_delta: float) -> void:
 	var r := vp.get_visible_rect()
 	vp.warp_mouse(r.position + r.size * 0.5)
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
+	_gun_reload = maxf(_gun_reload - _delta, 0.0)
+	if _gun_reload <= 0.0 and _gun_ammo <= 0:
+		_gun_ammo = gun_mag_size
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
 
@@ -236,9 +244,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
 		):
 			if event.pressed:
-				if _gun_enabled and _gun_cd <= 0.0 and _world_actions_input_ok():
+				if (
+					_gun_enabled
+					and _gun_cd <= 0.0
+					and _gun_reload <= 0.0
+					and _gun_ammo > 0
+					and _world_actions_input_ok()
+				):
 					_fire_gun_pyramid()
 					_gun_cd = gun_fire_cooldown_sec
+					_gun_ammo -= 1
+					if _gun_ammo <= 0:
+						_gun_reload = gun_reload_sec
 					get_viewport().set_input_as_handled()
 					return
 				if _held:
