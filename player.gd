@@ -35,7 +35,10 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var gun_pyramid_speed: float = 26.0
 @export var gun_fire_cooldown_sec: float = 0.12
 @export var gun_mag_size: int = 10
-@export var gun_reload_sec: float = 3.0
+## После любого выстрола, пока магазин не полон: через столько секунд патроны восстанавливаются целиком (таймер сбрасывается при каждом новом выстреле).
+@export_range(0.4, 4.0, 0.05) var gun_full_refill_delay_sec: float = 1.5
+## Короткая анимация «дозарядки» на модели пушки после автопополнения.
+@export_range(0.0, 1.0, 0.05) var gun_refill_finish_anim_sec: float = 0.35
 @export var dash_speed: float = 14.5
 @export var dash_duration_sec: float = 0.14
 @export var dash_cooldown_sec: float = 0.7
@@ -71,6 +74,7 @@ var _gun_node: Node3D = null
 var _gun_muzzle: Node3D = null
 var _gun_ammo: int = 10
 var _gun_reload: float = 0.0
+var _gun_refill_wait: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -143,8 +147,13 @@ func _process(_delta: float) -> void:
 	vp.warp_mouse(r.position + r.size * 0.5)
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
 	_gun_reload = maxf(_gun_reload - _delta, 0.0)
-	if _gun_reload <= 0.0 and _gun_ammo <= 0:
-		_gun_ammo = gun_mag_size
+	if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
+		_gun_refill_wait = maxf(_gun_refill_wait - _delta, 0.0)
+		if _gun_refill_wait <= 0.0:
+			_gun_ammo = gun_mag_size
+			_gun_refill_wait = 0.0
+			if gun_refill_finish_anim_sec > 0.0:
+				_gun_reload = gun_refill_finish_anim_sec
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -154,9 +163,15 @@ func _process(_delta: float) -> void:
 	if _gun_enabled:
 		_ensure_gun_nodes()
 		if _gun_node:
+			var t := float(Time.get_ticks_msec()) / 1000.0
+			var k_wait := 0.0
+			if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
+				k_wait = clampf(_gun_refill_wait / maxf(gun_full_refill_delay_sec, 0.01), 0.0, 1.0)
+			var k_fin := 0.0
 			if _gun_reload > 0.0:
-				var t := float(Time.get_ticks_msec()) / 1000.0
-				var k := clampf(_gun_reload / maxf(gun_reload_sec, 0.01), 0.0, 1.0)
+				k_fin = clampf(_gun_reload / maxf(gun_refill_finish_anim_sec, 0.01), 0.0, 1.0)
+			var k := maxf(k_wait, k_fin)
+			if k > 0.0:
 				_gun_node.rotation = Vector3(0.0, 0.0, sin(t * 10.0) * 0.35 * k)
 				_gun_node.position = Vector3(0.25, -0.22, -0.55) + Vector3(0.0, sin(t * 14.0) * 0.02 * k, 0.0)
 			else:
@@ -188,8 +203,8 @@ func _update_hp_ui() -> void:
 		_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
 	if _gun_label:
 		if _gun_enabled:
-			if _gun_reload > 0.0:
-				_gun_label.text = "GUN: RELOAD %.1fs" % [_gun_reload]
+			if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
+				_gun_label.text = "GUN: %d/%d  полн. %.1fs" % [_gun_ammo, gun_mag_size, _gun_refill_wait]
 			else:
 				_gun_label.text = "GUN: %d/%d" % [_gun_ammo, gun_mag_size]
 		else:
@@ -290,15 +305,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				if (
 					_gun_enabled
 					and _gun_cd <= 0.0
-					and _gun_reload <= 0.0
 					and _gun_ammo > 0
 					and _world_actions_input_ok()
 				):
 					_fire_gun_pyramid()
 					_gun_cd = gun_fire_cooldown_sec
 					_gun_ammo -= 1
-					if _gun_ammo <= 0:
-						_gun_reload = gun_reload_sec
+					if _gun_ammo < gun_mag_size:
+						_gun_refill_wait = gun_full_refill_delay_sec
 					get_viewport().set_input_as_handled()
 					return
 				if _held:
