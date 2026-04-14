@@ -505,6 +505,38 @@ func _nearest_enlargeable_box_on_aim(max_dist: float) -> RigidBody3D:
 func _enlarge_pick_ray_distance() -> float:
 	return maxf(cube_enlarge_ray_distance, aim_ray_length)
 
+func _find_oldest_full_map_cube(except_rb: RigidBody3D) -> RigidBody3D:
+	var lim := cube_enlarge_max_scale
+	const EPS := 0.03
+	var best: RigidBody3D = null
+	var best_tick := INF
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if not node is RigidBody3D:
+			continue
+		var rb := node as RigidBody3D
+		if rb == except_rb or rb == _held:
+			continue
+		if not _is_enlargeable_brick_box(rb):
+			continue
+		if rb.get_meta("_player_spawned", false):
+			continue
+		var m := float(rb.get_meta("_cube_scale_mul", 1.0))
+		if m < lim - EPS:
+			continue
+		var tick := float(rb.get_meta("_full_reached_tick", 0.0))
+		if tick <= 0.0:
+			# Если это "старый" куб без меты — считаем его самым старым.
+			tick = -1.0
+		if best == null or tick < best_tick:
+			best = rb
+			best_tick = tick
+	return best
+
+func _can_replace_full_map_cube(except_rb: RigidBody3D) -> bool:
+	if _count_map_cubes_at_full_enlarge() < max_cubes_at_full_enlarge:
+		return true
+	return _find_oldest_full_map_cube(except_rb) != null
+
 
 ## Кубы с карты (без _player_spawned): не больше max_cubes_at_full_enlarge на пределе. Кубы Shift+Q / человекоид не участвуют в этом лимите и могут вырасти до cube_enlarge_max_scale, как кирпич на сцене.
 func _count_map_cubes_at_full_enlarge() -> int:
@@ -560,7 +592,7 @@ func _enlarge_would_apply(rb: RigidBody3D) -> bool:
 	var hits_full := new_mul >= cube_enlarge_max_scale - EPS
 	if was_below_full and hits_full:
 		if not rb.get_meta("_player_spawned", false):
-			if _count_map_cubes_at_full_enlarge() >= max_cubes_at_full_enlarge:
+			if not _can_replace_full_map_cube(rb):
 				return false
 	return true
 
@@ -571,6 +603,14 @@ func _enlarge_cube(rb: RigidBody3D) -> void:
 	var mul: float = float(rb.get_meta("_cube_scale_mul", 1.0))
 	var new_mul := minf(mul * cube_enlarge_factor, cube_enlarge_max_scale)
 	var ratio := new_mul / mul
+	const EPS := 0.03
+	var was_below_full := mul < cube_enlarge_max_scale - EPS
+	var hits_full := new_mul >= cube_enlarge_max_scale - EPS
+	if was_below_full and hits_full and not rb.get_meta("_player_spawned", false):
+		if _count_map_cubes_at_full_enlarge() >= max_cubes_at_full_enlarge:
+			var victim := _find_oldest_full_map_cube(rb)
+			if is_instance_valid(victim):
+				victim.queue_free()
 
 	# Замороженные заспавненные кубы (мир/человекоид): без кадра без freeze коллизия может не обновиться.
 	var restore_frozen_static := (
@@ -582,6 +622,8 @@ func _enlarge_cube(rb: RigidBody3D) -> void:
 		rb.freeze = false
 
 	rb.set_meta("_cube_scale_mul", new_mul)
+	if hits_full and not rb.get_meta("_player_spawned", false) and not rb.has_meta("_full_reached_tick"):
+		rb.set_meta("_full_reached_tick", float(Time.get_ticks_usec()))
 
 	var mesh_i := _get_throwable_mesh(rb)
 	var col_n := rb.get_node_or_null("CollisionShape3D") as CollisionShape3D
