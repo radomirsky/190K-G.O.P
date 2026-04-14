@@ -32,6 +32,8 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var glue_look_distance: float = 4.0
 @export var glue_pair_max_distance: float = 1.45
 @export var humanoid_spawn_forward: float = 3.5
+@export var gun_pyramid_speed: float = 26.0
+@export var gun_fire_cooldown_sec: float = 0.12
 @export var cube_enlarge_factor: float = 1.15
 @export var cube_enlarge_max_scale: float = 5.0
 @export_range(1, 64, 1) var max_cubes_at_full_enlarge: int = 5
@@ -55,6 +57,10 @@ var _enlarge_hint_rb: RigidBody3D = null
 var _prev_enlarge_hint_rb: RigidBody3D = null
 var _jump_requested: bool = false
 var _throw_press_usec: int = -1
+var _gun_enabled: bool = false
+var _gun_cd: float = 0.0
+var _gun_node: Node3D = null
+var _gun_muzzle: Node3D = null
 var _cubes_world_locked: bool = false
 var _want_mouse_captured: bool = true
 var _crosshair_layer: CanvasLayer = null
@@ -114,6 +120,7 @@ func _process(_delta: float) -> void:
 		return
 	var r := vp.get_visible_rect()
 	vp.warp_mouse(r.position + r.size * 0.5)
+	_gun_cd = maxf(_gun_cd - _delta, 0.0)
 
 
 func _pitch_limit() -> float:
@@ -190,6 +197,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
 		):
 			if event.pressed:
+				if _gun_enabled and _gun_cd <= 0.0 and _world_actions_input_ok():
+					_fire_gun_pyramid()
+					_gun_cd = gun_fire_cooldown_sec
+					get_viewport().set_input_as_handled()
+					return
 				if _held:
 					_throw_press_usec = Time.get_ticks_usec()
 			else:
@@ -249,6 +261,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			_try_glue_throwable_cubes()
 			get_viewport().set_input_as_handled()
 		elif (
+			event.keycode == KEY_G
+			and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and _world_actions_input_ok()
+		):
+			_toggle_gun()
+			get_viewport().set_input_as_handled()
+		elif (
 			_is_use_key(event)
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and _world_actions_input_ok()
@@ -265,6 +284,63 @@ func _unhandled_input(event: InputEvent) -> void:
 				_try_pickup()
 			get_viewport().set_input_as_handled()
 
+
+func _toggle_gun() -> void:
+	_gun_enabled = not _gun_enabled
+	if _gun_enabled:
+		_ensure_gun_nodes()
+		if _gun_node:
+			_gun_node.visible = true
+	else:
+		if _gun_node:
+			_gun_node.visible = false
+
+
+func _ensure_gun_nodes() -> void:
+	if _gun_node != null and is_instance_valid(_gun_node):
+		return
+	if _camera == null:
+		return
+	_gun_node = Node3D.new()
+	_gun_node.name = "PyramidGun"
+	_camera.add_child(_gun_node)
+	_gun_node.transform.origin = Vector3(0.25, -0.22, -0.55)
+
+	var mesh_i := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.18, 0.12, 0.42)
+	mesh_i.mesh = bm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.18, 0.18, 0.2, 1.0)
+	mesh_i.set_surface_override_material(0, mat)
+	_gun_node.add_child(mesh_i)
+
+	_gun_muzzle = Node3D.new()
+	_gun_muzzle.name = "Muzzle"
+	_gun_muzzle.transform.origin = Vector3(0.0, -0.02, -0.32)
+	_gun_node.add_child(_gun_muzzle)
+
+	_gun_node.visible = false
+
+
+func _fire_gun_pyramid() -> void:
+	var scene := get_tree().current_scene
+	if scene == null or _camera == null:
+		return
+	_ensure_gun_nodes()
+	if _gun_muzzle == null:
+		return
+	var pyr := THROWABLE_PYRAMID_SCENE.instantiate() as RigidBody3D
+	scene.add_child(pyr)
+	pyr.global_position = _gun_muzzle.global_position
+	pyr.global_rotation = _camera.global_rotation
+	pyr.linear_velocity = _throw_aim_dir() * gun_pyramid_speed
+	pyr.angular_velocity = Vector3.ZERO
+	if _cubes_world_locked:
+		pyr.freeze = true
+		pyr.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	_update_throwable_visual(pyr)
+	ThrowablesBudget.track_throwable(pyr)
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
