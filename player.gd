@@ -48,8 +48,15 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var stasis_fire_cooldown_sec: float = 0.18
 @export var stasis_mag_size: int = 5
 @export var stasis_refill_delay_sec: float = 2.0
-@export_range(30.0, 85.0, 0.5) var stasis_aim_fov: float = 38.0
-@export var stasis_aim_fov_smooth: float = 14.0
+## Анимация после пополнения магазина стазиса (отдельно от пирамиды).
+@export_range(0.0, 2.5, 0.05) var stasis_refill_finish_anim_sec: float = 0.6
+@export var stasis_reload_ring_spin_mul: float = 9.0
+@export_range(0.15, 0.65, 0.02) var stasis_reload_tilt_max: float = 0.38
+@export_range(10.0, 85.0, 0.5) var stasis_aim_fov: float = 22.0
+@export var stasis_aim_fov_smooth: float = 16.0
+## Подвод оружия к камере при ПКМ (в локале камеры).
+@export var stasis_aim_model_offset: Vector3 = Vector3(0.2, -0.07, 0.16)
+@export var stasis_aim_pos_smooth: float = 18.0
 @export var dash_speed: float = 14.5
 @export var dash_duration_sec: float = 0.14
 @export var dash_cooldown_sec: float = 0.7
@@ -92,6 +99,8 @@ var _stasis_node: Node3D = null
 var _stasis_muzzle: Node3D = null
 var _stasis_reload: float = 0.0
 var _stasis_refill_wait: float = 0.0
+var _stasis_ring_visual: MeshInstance3D = null
+var _stasis_ads_blend: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -179,19 +188,28 @@ func _process(_delta: float) -> void:
 		if _stasis_refill_wait <= 0.0:
 			_stasis_ammo = stasis_mag_size
 			_stasis_refill_wait = 0.0
-			if gun_refill_finish_anim_sec > 0.0:
-				_stasis_reload = gun_refill_finish_anim_sec
+			if stasis_refill_finish_anim_sec > 0.0:
+				_stasis_reload = stasis_refill_finish_anim_sec
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
 	_update_hp_ui()
 
+	var want_stasis_aim := false
+	if _camera and _equipped == EquippedGun.STASIS:
+		want_stasis_aim = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	var stasis_reload_busy := _stasis_refill_wait > 0.0 or _stasis_reload > 0.0
+	var ads_target := 1.0 if (want_stasis_aim and not stasis_reload_busy) else 0.0
+	_stasis_ads_blend = lerpf(
+		_stasis_ads_blend,
+		ads_target,
+		1.0 - exp(-stasis_aim_pos_smooth * _delta)
+	)
+	if _equipped != EquippedGun.STASIS:
+		_stasis_ads_blend = lerpf(_stasis_ads_blend, 0.0, 1.0 - exp(-12.0 * _delta))
+
 	if _camera:
-		var want_aim := (
-			_equipped == EquippedGun.STASIS
-			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
-		)
-		var target_fov := stasis_aim_fov if want_aim else camera_fov
+		var target_fov := stasis_aim_fov if want_stasis_aim else camera_fov
 		var fk := 1.0 - exp(-stasis_aim_fov_smooth * _delta)
 		_camera.fov = lerpf(_camera.fov, target_fov, fk)
 
@@ -215,23 +233,41 @@ func _process(_delta: float) -> void:
 				_gun_node.position = _GUN_MODEL_LOCAL_POS
 	elif _equipped == EquippedGun.STASIS:
 		_ensure_stasis_nodes()
-		if _stasis_node:
+		if _stasis_node and _stasis_ring_visual:
 			var t2 := float(Time.get_ticks_msec()) / 1000.0
-			var k_wait2 := 0.0
-			if _stasis_ammo < stasis_mag_size and _stasis_refill_wait > 0.0:
-				k_wait2 = clampf(_stasis_refill_wait / maxf(stasis_refill_delay_sec, 0.01), 0.0, 1.0)
-			var k_fin2 := 0.0
-			if _stasis_reload > 0.0:
-				k_fin2 = clampf(_stasis_reload / maxf(gun_refill_finish_anim_sec, 0.01), 0.0, 1.0)
-			var k2 := maxf(k_wait2, k_fin2)
-			if k2 > 0.0:
-				_stasis_node.rotation = Vector3(sin(t2 * 9.0) * 0.2 * k2, 0.0, sin(t2 * 11.0) * 0.3 * k2)
+			var ads_ofs := stasis_aim_model_offset * _stasis_ads_blend
+			if _stasis_refill_wait > 0.0:
+				var prog := 1.0 - clampf(_stasis_refill_wait / maxf(stasis_refill_delay_sec, 0.01), 0.0, 1.0)
+				var wob := sin(t2 * 11.0) * 0.07
+				var tilt := lerpf(stasis_reload_tilt_max, stasis_reload_tilt_max * 0.35, prog)
+				tilt += sin(t2 * 15.5) * 0.045
+				_stasis_node.rotation = Vector3(tilt, wob, sin(t2 * 9.0) * 0.11)
+				var pull_z := lerpf(0.16, 0.05, prog)
 				_stasis_node.position = (
-					_STASIS_GUN_LOCAL_POS + Vector3(0.0, sin(t2 * 14.0) * 0.02 * k2, 0.0)
+					_STASIS_GUN_LOCAL_POS
+					+ ads_ofs
+					+ Vector3(wob * 0.35, -0.07 * prog, pull_z)
 				)
+				var sp := t2 * stasis_reload_ring_spin_mul
+				_stasis_ring_visual.rotation = Vector3(sp * 1.1, sin(t2 * 19.0) * 0.18, sp * 0.75)
+				_stasis_ring_visual.scale = Vector3.ONE
+			elif _stasis_reload > 0.0:
+				var fin := 1.0 - clampf(
+					_stasis_reload / maxf(stasis_refill_finish_anim_sec, 0.01),
+					0.0,
+					1.0
+				)
+				var snap := sin(fin * PI)
+				_stasis_node.rotation = Vector3(-0.26 * (1.0 - snap), 0.0, 0.08 * snap)
+				_stasis_node.position = _STASIS_GUN_LOCAL_POS + ads_ofs + Vector3(0.0, 0.025 * snap, -0.09 * snap)
+				_stasis_ring_visual.rotation = Vector3.ZERO
+				var rs := 1.0 + 0.32 * snap
+				_stasis_ring_visual.scale = Vector3(rs, rs, rs)
 			else:
 				_stasis_node.rotation = Vector3.ZERO
-				_stasis_node.position = _STASIS_GUN_LOCAL_POS
+				_stasis_node.position = _STASIS_GUN_LOCAL_POS + ads_ofs
+				_stasis_ring_visual.rotation = Vector3.ZERO
+				_stasis_ring_visual.scale = Vector3.ONE
 
 
 func _setup_hp_ui() -> void:
@@ -544,6 +580,9 @@ func _reset_stasis_model_idle() -> void:
 	if _stasis_node:
 		_stasis_node.rotation = Vector3.ZERO
 		_stasis_node.position = _STASIS_GUN_LOCAL_POS
+	if _stasis_ring_visual:
+		_stasis_ring_visual.rotation = Vector3.ZERO
+		_stasis_ring_visual.scale = Vector3.ONE
 
 
 func _cancel_gun_finish_reload_anim() -> void:
@@ -614,6 +653,12 @@ func _ensure_gun_nodes() -> void:
 
 func _ensure_stasis_nodes() -> void:
 	if _stasis_node != null and is_instance_valid(_stasis_node):
+		if _stasis_ring_visual == null or not is_instance_valid(_stasis_ring_visual):
+			_stasis_ring_visual = _stasis_node.get_node_or_null("StasisRingVisual") as MeshInstance3D
+			if _stasis_ring_visual == null and _stasis_node.get_child_count() > 0:
+				var c0 := _stasis_node.get_child(0)
+				if c0 is MeshInstance3D:
+					_stasis_ring_visual = c0 as MeshInstance3D
 		return
 	if _camera == null:
 		return
@@ -635,6 +680,8 @@ func _ensure_stasis_nodes() -> void:
 	smat.emission = Color(0.15, 0.35, 0.9, 1.0)
 	smat.emission_energy_multiplier = 0.4
 	ring_mesh.set_surface_override_material(0, smat)
+	ring_mesh.name = "StasisRingVisual"
+	_stasis_ring_visual = ring_mesh
 	_stasis_node.add_child(ring_mesh)
 
 	var grip := MeshInstance3D.new()
