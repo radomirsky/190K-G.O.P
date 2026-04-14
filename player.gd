@@ -704,6 +704,7 @@ func _fire_stasis_ring() -> void:
 	if _stasis_muzzle == null:
 		return
 	var ring := THROWABLE_STASIS_RING_SCENE.instantiate() as RigidBody3D
+	ring.add_to_group("stasis_projectile")
 	scene.add_child(ring)
 	ring.global_position = _stasis_muzzle.global_position
 	ring.global_rotation = _camera.global_rotation

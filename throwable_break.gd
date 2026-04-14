@@ -171,7 +171,10 @@ func _on_body_shape_entered(
 	if not ThrowablesBudget.brick_shattering_enabled:
 		return
 	# Пирамидки и кольца стазиса: при касании пола/платформ исчезают.
-	if (name == "Pyramid" or name == "StasisRing") and body is StaticBody3D:
+	if (
+(name == "Pyramid" or name == "StasisRing" or is_in_group("stasis_projectile"))
+		and body is StaticBody3D
+	):
 		call_deferred("queue_free")
 		return
 	if not body is RigidBody3D:

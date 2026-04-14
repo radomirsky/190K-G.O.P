@@ -221,13 +221,17 @@ func _die_scatter() -> void:
 	queue_free()
 
 
+func _is_stasis_projectile(rb: RigidBody3D) -> bool:
+	return rb.is_in_group("stasis_projectile") or rb.name == "StasisRing"
+
+
 func _on_break_area_body_entered(body: Node) -> void:
 	if not body is RigidBody3D:
 		return
 	var rb := body as RigidBody3D
 	if not rb.is_in_group("throwable"):
 		return
-	var is_stasis_proj := rb.name == "StasisRing"
+	var is_stasis_proj := _is_stasis_projectile(rb)
 	if not is_stasis_proj and _break_cd > 0.0:
 		return
 
@@ -236,14 +240,14 @@ func _on_break_area_body_entered(body: Node) -> void:
 		rb.name == "Cube"
 		or rb.name.begins_with("BrickShard")
 		or rb.name == "Pyramid"
-		or rb.name == "StasisRing"
+		or is_stasis_proj
 	):
 		if not is_stasis_proj:
 			_break_cd = break_cooldown_sec
 		# Снаряд НЕ ломаем — только убиваем врага.
 		# Можно чуть "отпружинить" куб от врага, чтобы было ощущение удара.
 		if is_instance_valid(rb):
-			if rb.name == "Pyramid" or rb.name == "StasisRing":
+			if rb.name == "Pyramid" or is_stasis_proj:
 				# Снаряд исчезает, когда наносит урон врагу.
 				rb.call_deferred("queue_free")
 			var away := (rb.global_position - global_position)
@@ -251,12 +255,10 @@ func _on_break_area_body_entered(body: Node) -> void:
 			if away.length_squared() > 0.0001:
 				away = away.normalized()
 				rb.apply_central_impulse(away * 1.25)
-		var dmg: int
-		if rb.name == "StasisRing":
-			dmg = maxi(1, stasis_hit_damage)
-			call_deferred("_take_stasis_hit", dmg)
+		if is_stasis_proj:
+			_take_stasis_hit(maxi(1, stasis_hit_damage))
 		else:
-			dmg = _compute_hit_damage_from_player()
+			var dmg: int = _compute_hit_damage_from_player()
 			call_deferred("_take_hit", dmg)
 		return
 
