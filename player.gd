@@ -49,6 +49,8 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 @onready var _hold_point: Node3D = $CameraPivot/Camera3D/HoldPoint
 
 var _held: RigidBody3D = null
+var _last_player_spawned_cube: RigidBody3D = null
+var _last_spawned_exit_cb: Callable = Callable()
 var _enlarge_hint_rb: RigidBody3D = null
 var _prev_enlarge_hint_rb: RigidBody3D = null
 var _jump_requested: bool = false
@@ -423,10 +425,71 @@ func _is_enlargeable_brick_box(rb: RigidBody3D) -> bool:
 
 
 func _raycast_aimed_enlarge_box(max_dist: float) -> RigidBody3D:
-	var rb := _raycast_aimed_throwable(max_dist)
+	var rb := _raycast_aimed_throwable_passthrough(max_dist)
 	if rb != null and _is_enlargeable_brick_box(rb):
 		return rb
-	return _nearest_enlargeable_box_on_aim(max_dist)
+	rb = _nearest_enlargeable_box_on_aim(max_dist)
+	if rb != null:
+		return rb
+	if (
+		is_instance_valid(_last_player_spawned_cube)
+		and _last_player_spawned_cube.is_inside_tree()
+		and _is_enlargeable_brick_box(_last_player_spawned_cube)
+		and _last_player_spawned_cube.get_meta("_player_spawned", false)
+	):
+		var ad2 := _aim_ray_from_dir()
+		var o2: Vector3 = ad2[0]
+		var dir2: Vector3 = (ad2[1] as Vector3).normalized()
+		var to_c := _last_player_spawned_cube.global_position - o2
+		var t2 := to_c.dot(dir2)
+		if t2 > 0.15 and t2 < max_dist:
+			var dn := to_c.normalized()
+			if dir2.dot(dn) > 0.78:
+				return _last_player_spawned_cube
+	return null
+
+
+func _raycast_aimed_throwable_passthrough(max_dist: float) -> RigidBody3D:
+	var ad := _aim_ray_from_dir()
+	var pos: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var space := get_world_3d().direct_space_state
+	var excl: Array[RID] = [get_rid()]
+	if _held != null and is_instance_valid(_held):
+		excl.append(_held.get_rid())
+	var total := 0.0
+	const BUMP := 0.1
+	const MAX_STEPS := 48
+	for _step in MAX_STEPS:
+		if total >= max_dist - 0.001:
+			break
+		var seg_end := pos + dir * (max_dist - total)
+		var q := PhysicsRayQueryParameters3D.create(pos, seg_end)
+		q.collide_with_areas = false
+		q.collide_with_bodies = true
+		q.hit_from_inside = true
+		q.exclude = excl
+		var hit: Dictionary = space.intersect_ray(q)
+		if hit.is_empty():
+			return null
+		var col: Object = hit["collider"]
+		if col is RigidBody3D and col.is_in_group("throwable"):
+			return col as RigidBody3D
+		if not col is CollisionObject3D:
+			return null
+		var rid: RID = (col as CollisionObject3D).get_rid()
+		var already := false
+		for e in excl:
+			if e == rid:
+				already = true
+				break
+		if not already:
+			excl.append(rid)
+		var hp: Vector3 = hit["position"] as Vector3
+		var traveled: float = pos.distance_to(hp) + BUMP
+		total += traveled
+		pos = hp + dir * BUMP
+	return null
 
 
 func _nearest_enlargeable_box_on_aim(max_dist: float) -> RigidBody3D:
@@ -435,7 +498,8 @@ func _nearest_enlargeable_box_on_aim(max_dist: float) -> RigidBody3D:
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
 	var best: RigidBody3D = null
 	var best_t := INF
-	const MAX_SEP := 1.45
+	var sep_lim := maxf(3.5, max_dist * 0.07)
+	var sep2 := sep_lim * sep_lim
 	for node in get_tree().get_nodes_in_group("throwable"):
 		if not node is RigidBody3D:
 			continue
@@ -447,7 +511,7 @@ func _nearest_enlargeable_box_on_aim(max_dist: float) -> RigidBody3D:
 		if t < 0.15 or t > max_dist:
 			continue
 		var perp2 := rel.length_squared() - t * t
-		if perp2 > MAX_SEP * MAX_SEP:
+		if perp2 > sep2:
 			continue
 		if best == null or t < best_t:
 			best_t = t
@@ -636,8 +700,20 @@ func _spawn_throwable_cube() -> void:
 	if _cubes_world_locked:
 		cube.freeze = true
 		cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	if _last_spawned_exit_cb.is_valid():
+		var prev := _last_player_spawned_cube
+		if is_instance_valid(prev) and prev.tree_exiting.is_connected(_last_spawned_exit_cb):
+			prev.tree_exiting.disconnect(_last_spawned_exit_cb)
+	_last_player_spawned_cube = cube
+	_last_spawned_exit_cb = _on_last_spawned_cube_exiting.bind(cube)
+	cube.tree_exiting.connect(_last_spawned_exit_cb)
 	_update_throwable_visual(cube)
 	ThrowablesBudget.track_throwable(cube)
+
+
+func _on_last_spawned_cube_exiting(cube: RigidBody3D) -> void:
+	if _last_player_spawned_cube == cube:
+		_last_player_spawned_cube = null
 
 
 func _spawn_throwable_pyramid() -> void:
