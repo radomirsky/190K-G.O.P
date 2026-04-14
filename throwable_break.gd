@@ -38,6 +38,10 @@ func _box_mesh_size(rb: RigidBody3D) -> Vector3:
 	return Vector3.ONE
 
 
+func _v3_max_axis(v: Vector3) -> float:
+	return maxf(v.x, maxf(v.y, v.z))
+
+
 func _chip_cube_on_impact(big: RigidBody3D, small: RigidBody3D) -> void:
 	if (
 		not is_instance_valid(big)
@@ -67,15 +71,18 @@ func _chip_cube_on_impact(big: RigidBody3D, small: RigidBody3D) -> void:
 
 	var small_s := _box_mesh_size(small)
 	var chip_edge := clampf(
-		small_s.maxf() * 0.65,
-		big_s.maxf() * 0.07,
-		big_s.maxf() * 0.3
+		_v3_max_axis(small_s) * 0.65,
+		_v3_max_axis(big_s) * 0.07,
+		_v3_max_axis(big_s) * 0.3
 	)
 	var vol_chip := chip_edge * chip_edge * chip_edge
 	vol_chip = minf(vol_chip, vol_big * 0.22)
 	chip_edge = pow(vol_chip, 1.0 / 3.0)
 	var new_vol := vol_big - vol_chip
-	var new_edge := pow(maxf(new_vol, pow(maxf(big_s.maxf() * 0.32, 0.18), 3.0)), 1.0 / 3.0)
+	var new_edge := pow(
+		maxf(new_vol, pow(maxf(_v3_max_axis(big_s) * 0.32, 0.18), 3.0)),
+		1.0 / 3.0
+	)
 	vol_chip = vol_big - pow(new_edge, 3.0)
 	chip_edge = pow(maxf(vol_chip, 1e-5), 1.0 / 3.0)
 
@@ -83,7 +90,7 @@ func _chip_cube_on_impact(big: RigidBody3D, small: RigidBody3D) -> void:
 	if away.length_squared() < 1e-6:
 		away = big.global_transform.basis * Vector3.FORWARD
 	away = away.normalized()
-	var half := big_s.maxf() * 0.5
+	var half := _v3_max_axis(big_s) * 0.5
 
 	var bm_new := (mesh_big.mesh as BoxMesh).duplicate() as BoxMesh
 	bm_new.size = Vector3(new_edge, new_edge, new_edge)
