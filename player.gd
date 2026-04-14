@@ -79,13 +79,19 @@ var _enlarge_hint_rb: RigidBody3D = null
 var _prev_enlarge_hint_rb: RigidBody3D = null
 var _jump_requested: bool = false
 var _throw_press_usec: int = -1
-var _gun_enabled: bool = false
+var _equipped: EquippedGun = EquippedGun.NONE
 var _gun_cd: float = 0.0
 var _gun_node: Node3D = null
 var _gun_muzzle: Node3D = null
 var _gun_ammo: int = 10
 var _gun_reload: float = 0.0
 var _gun_refill_wait: float = 0.0
+var _stasis_ammo: int = 5
+var _stasis_cd: float = 0.0
+var _stasis_node: Node3D = null
+var _stasis_muzzle: Node3D = null
+var _stasis_reload: float = 0.0
+var _stasis_refill_wait: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -119,6 +125,7 @@ func _ready() -> void:
 	_look_pitch_target = _camera_pivot.rotation.x
 	_hp = max_hp
 	_gun_ammo = gun_mag_size
+	_stasis_ammo = stasis_mag_size
 
 
 func _exit_tree() -> void:
@@ -165,13 +172,31 @@ func _process(_delta: float) -> void:
 			_gun_refill_wait = 0.0
 			if gun_refill_finish_anim_sec > 0.0:
 				_gun_reload = gun_refill_finish_anim_sec
+	_stasis_cd = maxf(_stasis_cd - _delta, 0.0)
+	_stasis_reload = maxf(_stasis_reload - _delta, 0.0)
+	if _stasis_ammo < stasis_mag_size and _stasis_refill_wait > 0.0:
+		_stasis_refill_wait = maxf(_stasis_refill_wait - _delta, 0.0)
+		if _stasis_refill_wait <= 0.0:
+			_stasis_ammo = stasis_mag_size
+			_stasis_refill_wait = 0.0
+			if gun_refill_finish_anim_sec > 0.0:
+				_stasis_reload = gun_refill_finish_anim_sec
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
 	_update_hp_ui()
 
+	if _camera:
+		var want_aim := (
+			_equipped == EquippedGun.STASIS
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+		)
+		var target_fov := stasis_aim_fov if want_aim else camera_fov
+		var fk := 1.0 - exp(-stasis_aim_fov_smooth * _delta)
+		_camera.fov = lerpf(_camera.fov, target_fov, fk)
+
 	# Анимация перезарядки: лёгкое покачивание/наклон пушки.
-	if _gun_enabled:
+	if _equipped == EquippedGun.PYRAMID:
 		_ensure_gun_nodes()
 		if _gun_node:
 			var t := float(Time.get_ticks_msec()) / 1000.0
@@ -188,6 +213,25 @@ func _process(_delta: float) -> void:
 			else:
 				_gun_node.rotation = Vector3.ZERO
 				_gun_node.position = _GUN_MODEL_LOCAL_POS
+	elif _equipped == EquippedGun.STASIS:
+		_ensure_stasis_nodes()
+		if _stasis_node:
+			var t2 := float(Time.get_ticks_msec()) / 1000.0
+			var k_wait2 := 0.0
+			if _stasis_ammo < stasis_mag_size and _stasis_refill_wait > 0.0:
+				k_wait2 = clampf(_stasis_refill_wait / maxf(stasis_refill_delay_sec, 0.01), 0.0, 1.0)
+			var k_fin2 := 0.0
+			if _stasis_reload > 0.0:
+				k_fin2 = clampf(_stasis_reload / maxf(gun_refill_finish_anim_sec, 0.01), 0.0, 1.0)
+			var k2 := maxf(k_wait2, k_fin2)
+			if k2 > 0.0:
+				_stasis_node.rotation = Vector3(sin(t2 * 9.0) * 0.2 * k2, 0.0, sin(t2 * 11.0) * 0.3 * k2)
+				_stasis_node.position = (
+					_STASIS_GUN_LOCAL_POS + Vector3(0.0, sin(t2 * 14.0) * 0.02 * k2, 0.0)
+				)
+			else:
+				_stasis_node.rotation = Vector3.ZERO
+				_stasis_node.position = _STASIS_GUN_LOCAL_POS
 
 
 func _setup_hp_ui() -> void:
@@ -213,13 +257,22 @@ func _update_hp_ui() -> void:
 	if _hp_label:
 		_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
 	if _gun_label:
-		if _gun_enabled:
+		if _equipped == EquippedGun.PYRAMID:
 			if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
 				_gun_label.text = "GUN: %d/%d  полн. %.1fs" % [_gun_ammo, gun_mag_size, _gun_refill_wait]
 			elif _gun_reload > 0.0:
 				_gun_label.text = "GUN: %d/%d  дозарядка…" % [_gun_ammo, gun_mag_size]
 			else:
 				_gun_label.text = "GUN: %d/%d" % [_gun_ammo, gun_mag_size]
+		elif _equipped == EquippedGun.STASIS:
+			if _stasis_ammo < stasis_mag_size and _stasis_refill_wait > 0.0:
+				_gun_label.text = (
+					"СТАЗИС: %d/%d  полн. %.1fs  [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size, _stasis_refill_wait]
+				)
+			elif _stasis_reload > 0.0:
+				_gun_label.text = "СТАЗИС: %d/%d  дозарядка… [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size]
+			else:
+				_gun_label.text = "СТАЗИС: %d/%d  [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size]
 		else:
 			_gun_label.text = ""
 
@@ -316,7 +369,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		):
 			if event.pressed:
 				if (
-					_gun_enabled
+					_equipped == EquippedGun.PYRAMID
 					and _gun_cd <= 0.0
 					and _gun_ammo > 0
 					and _world_actions_input_ok()
@@ -327,6 +380,21 @@ func _unhandled_input(event: InputEvent) -> void:
 					_gun_ammo -= 1
 					if _gun_ammo < gun_mag_size:
 						_gun_refill_wait = gun_full_refill_delay_sec
+					_update_hp_ui()
+					get_viewport().set_input_as_handled()
+					return
+				if (
+					_equipped == EquippedGun.STASIS
+					and _stasis_cd <= 0.0
+					and _stasis_ammo > 0
+					and _world_actions_input_ok()
+				):
+					_cancel_stasis_reload_anim()
+					_fire_stasis_ring()
+					_stasis_cd = stasis_fire_cooldown_sec
+					_stasis_ammo -= 1
+					if _stasis_ammo < stasis_mag_size:
+						_stasis_refill_wait = stasis_refill_delay_sec
 					_update_hp_ui()
 					get_viewport().set_input_as_handled()
 					return
@@ -397,6 +465,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		):
 			_try_glue_throwable_cubes()
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_F and _world_actions_input_ok():
+			_toggle_stasis()
+			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_G
 			and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
@@ -462,12 +533,17 @@ func _clear_world_objects() -> void:
 			(node as Node).call_deferred("queue_free")
 
 func _reset_gun_model_idle() -> void:
-	if not _gun_enabled:
-		return
 	_ensure_gun_nodes()
 	if _gun_node:
 		_gun_node.rotation = Vector3.ZERO
 		_gun_node.position = _GUN_MODEL_LOCAL_POS
+
+
+func _reset_stasis_model_idle() -> void:
+	_ensure_stasis_nodes()
+	if _stasis_node:
+		_stasis_node.rotation = Vector3.ZERO
+		_stasis_node.position = _STASIS_GUN_LOCAL_POS
 
 
 func _cancel_gun_finish_reload_anim() -> void:
@@ -477,15 +553,36 @@ func _cancel_gun_finish_reload_anim() -> void:
 	_reset_gun_model_idle()
 
 
+func _cancel_stasis_reload_anim() -> void:
+	if _stasis_reload <= 0.0:
+		return
+	_stasis_reload = 0.0
+	_reset_stasis_model_idle()
+
+
+func _update_weapon_visibility() -> void:
+	_ensure_gun_nodes()
+	_ensure_stasis_nodes()
+	if _gun_node:
+		_gun_node.visible = (_equipped == EquippedGun.PYRAMID)
+	if _stasis_node:
+		_stasis_node.visible = (_equipped == EquippedGun.STASIS)
+
+
 func _toggle_gun() -> void:
-	_gun_enabled = not _gun_enabled
-	if _gun_enabled:
-		_ensure_gun_nodes()
-		if _gun_node:
-			_gun_node.visible = true
+	if _equipped == EquippedGun.PYRAMID:
+		_equipped = EquippedGun.NONE
 	else:
-		if _gun_node:
-			_gun_node.visible = false
+		_equipped = EquippedGun.PYRAMID
+	_update_weapon_visibility()
+
+
+func _toggle_stasis() -> void:
+	if _equipped == EquippedGun.STASIS:
+		_equipped = EquippedGun.NONE
+	else:
+		_equipped = EquippedGun.STASIS
+	_update_weapon_visibility()
 
 
 func _ensure_gun_nodes() -> void:
@@ -513,6 +610,72 @@ func _ensure_gun_nodes() -> void:
 	_gun_node.add_child(_gun_muzzle)
 
 	_gun_node.visible = false
+
+
+func _ensure_stasis_nodes() -> void:
+	if _stasis_node != null and is_instance_valid(_stasis_node):
+		return
+	if _camera == null:
+		return
+	_stasis_node = Node3D.new()
+	_stasis_node.name = "StasisGun"
+	_camera.add_child(_stasis_node)
+	_stasis_node.transform.origin = _STASIS_GUN_LOCAL_POS
+
+	var ring_mesh := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.07
+	tm.outer_radius = 0.13
+	tm.rings = 2
+	tm.ring_segments = 20
+	ring_mesh.mesh = tm
+	var smat := StandardMaterial3D.new()
+	smat.albedo_color = Color(0.35, 0.55, 0.98, 1.0)
+	smat.emission_enabled = true
+	smat.emission = Color(0.15, 0.35, 0.9, 1.0)
+	smat.emission_energy_multiplier = 0.4
+	ring_mesh.set_surface_override_material(0, smat)
+	_stasis_node.add_child(ring_mesh)
+
+	var grip := MeshInstance3D.new()
+	var gm := BoxMesh.new()
+	gm.size = Vector3(0.1, 0.1, 0.28)
+	grip.mesh = gm
+	var gmat := StandardMaterial3D.new()
+	gmat.albedo_color = Color(0.2, 0.22, 0.28, 1.0)
+	grip.set_surface_override_material(0, gmat)
+	grip.position = Vector3(0.0, 0.0, 0.12)
+	_stasis_node.add_child(grip)
+
+	_stasis_muzzle = Node3D.new()
+	_stasis_muzzle.name = "StasisMuzzle"
+	_stasis_muzzle.transform.origin = Vector3(0.0, 0.0, -0.26)
+	_stasis_node.add_child(_stasis_muzzle)
+
+	_stasis_node.visible = false
+
+
+func _fire_stasis_ring() -> void:
+	var scene := get_tree().current_scene
+	if scene == null or _camera == null:
+		return
+	_ensure_stasis_nodes()
+	if _stasis_muzzle == null:
+		return
+	var ring := THROWABLE_STASIS_RING_SCENE.instantiate() as RigidBody3D
+	scene.add_child(ring)
+	ring.global_position = _stasis_muzzle.global_position
+	ring.global_rotation = _camera.global_rotation
+	var dir := _throw_aim_dir()
+	ring.linear_velocity = dir * stasis_ring_speed
+	var spin := dir.cross(Vector3.UP)
+	if spin.length_squared() < 1e-5:
+		spin = dir.cross(Vector3.RIGHT)
+	ring.angular_velocity = spin.normalized() * 20.0
+	if _cubes_world_locked:
+		ring.freeze = true
+		ring.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	ThrowablesBudget.track_throwable(ring)
 
 
 func _fire_gun_pyramid() -> void:
@@ -952,6 +1115,8 @@ func _ensure_throwable_material(mesh: MeshInstance3D) -> StandardMaterial3D:
 
 func _update_throwable_visual(rb: RigidBody3D) -> void:
 	if rb == null or not is_instance_valid(rb):
+		return
+	if rb.name == "StasisRing":
 		return
 	var mesh := _get_throwable_mesh(rb)
 	if mesh == null:
