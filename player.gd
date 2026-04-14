@@ -350,7 +350,9 @@ func _physics_process(delta: float) -> void:
 			velocity.y = 0.0
 
 	if _jump_requested:
-		velocity.y = jump_velocity
+		if is_on_floor():
+			velocity.y = jump_velocity
+		# Не даём "копить" прыжок в воздухе.
 		_jump_requested = false
 
 	var dir2 := Vector2.ZERO

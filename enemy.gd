@@ -51,9 +51,9 @@ func _on_break_area_body_entered(body: Node) -> void:
 		return
 
 	# Попали кубом в врага — враг разваливается.
-	if rb.name == "Cube" or rb.name.begins_with("BrickShard"):
+	if rb.name == "Cube" or rb.name.begins_with("BrickShard") or rb.name == "Pyramid":
 		_break_cd = break_cooldown_sec
-		# Куб/осколок НЕ ломаем — только убиваем врага.
+		# Снаряд НЕ ломаем — только убиваем врага.
 		# Можно чуть "отпружинить" куб от врага, чтобы было ощущение удара.
 		if is_instance_valid(rb):
 			var away := (rb.global_position - global_position)

@@ -170,6 +170,10 @@ func _on_body_shape_entered(
 		return
 	if not ThrowablesBudget.brick_shattering_enabled:
 		return
+	# Пирамидки: при касании пола/платформ исчезают.
+	if name == "Pyramid" and body is StaticBody3D:
+		call_deferred("queue_free")
+		return
 	if not body is RigidBody3D:
 		return
 	if not body.is_in_group("throwable"):
