@@ -429,24 +429,7 @@ func _raycast_aimed_enlarge_box(max_dist: float) -> RigidBody3D:
 	if rb != null and _is_enlargeable_brick_box(rb):
 		return rb
 	rb = _nearest_enlargeable_box_on_aim(max_dist)
-	if rb != null:
-		return rb
-	if (
-		is_instance_valid(_last_player_spawned_cube)
-		and _last_player_spawned_cube.is_inside_tree()
-		and _is_enlargeable_brick_box(_last_player_spawned_cube)
-		and _last_player_spawned_cube.get_meta("_player_spawned", false)
-	):
-		var ad2 := _aim_ray_from_dir()
-		var o2: Vector3 = ad2[0]
-		var dir2: Vector3 = (ad2[1] as Vector3).normalized()
-		var to_c := _last_player_spawned_cube.global_position - o2
-		var t2 := to_c.dot(dir2)
-		if t2 > 0.15 and t2 < max_dist:
-			var dn := to_c.normalized()
-			if dir2.dot(dn) > 0.78:
-				return _last_player_spawned_cube
-	return null
+	return rb
 
 
 func _raycast_aimed_throwable_passthrough(max_dist: float) -> RigidBody3D:
@@ -543,27 +526,25 @@ func _count_map_cubes_at_full_enlarge() -> int:
 
 
 func _try_enlarge_cube() -> bool:
-	var rb: RigidBody3D = null
-	if _held and _is_enlargeable_brick_box(_held):
-		rb = _held
-	else:
-		rb = _raycast_aimed_enlarge_box(_enlarge_pick_ray_distance())
-	if rb == null:
-		return false
-	_enlarge_cube(rb)
-	return true
+	var aimed := _raycast_aimed_enlarge_box(_enlarge_pick_ray_distance())
+	if aimed != null and _enlarge_would_apply(aimed):
+		_enlarge_cube(aimed)
+		return true
+	if _held != null and _is_enlargeable_brick_box(_held) and _enlarge_would_apply(_held):
+		_enlarge_cube(_held)
+		return true
+	return false
 
 
 func _update_enlarge_hint_target() -> void:
-	var t: RigidBody3D = null
-	if _held and _is_enlargeable_brick_box(_held):
-		t = _held
-	else:
-		t = _raycast_aimed_enlarge_box(_enlarge_pick_ray_distance())
-	if t != null and _enlarge_would_apply(t):
-		_enlarge_hint_rb = t
-	else:
-		_enlarge_hint_rb = null
+	var aimed := _raycast_aimed_enlarge_box(_enlarge_pick_ray_distance())
+	if aimed != null and _enlarge_would_apply(aimed):
+		_enlarge_hint_rb = aimed
+		return
+	if _held != null and _is_enlargeable_brick_box(_held) and _enlarge_would_apply(_held):
+		_enlarge_hint_rb = _held
+		return
+	_enlarge_hint_rb = null
 
 
 func _enlarge_would_apply(rb: RigidBody3D) -> bool:
