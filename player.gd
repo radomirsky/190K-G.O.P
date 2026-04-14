@@ -47,7 +47,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var stasis_ring_speed: float = 52.0
 @export var stasis_fire_cooldown_sec: float = 0.18
 @export var stasis_mag_size: int = 5
-@export var stasis_refill_delay_sec: float = 2.0
+@export var stasis_refill_delay_sec: float = 5.0
 ## Анимация после пополнения магазина стазиса (отдельно от пирамиды).
 @export_range(0.0, 2.5, 0.05) var stasis_refill_finish_anim_sec: float = 0.6
 @export var stasis_reload_ring_spin_mul: float = 9.0
