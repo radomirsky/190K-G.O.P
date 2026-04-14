@@ -14,6 +14,13 @@ extends CharacterBody3D
 @export var damage_invuln_sec: float = 0.08
 @export var hit_flash_sec: float = 1.4
 @export var hit_flash_color: Color = Color(0.18, 0.95, 0.22, 1.0)
+## До игрока ближе этого расстояния — множитель урона максимальный.
+@export var proximity_damage_near_m: float = 3.5
+## От игрока дальше этого — множитель минимальный (линейно между near и far).
+@export var proximity_damage_far_m: float = 44.0
+@export var proximity_damage_base: int = 1
+@export var proximity_damage_close_mult: float = 2.6
+@export var proximity_damage_far_mult: float = 0.85
 
 var _break_cd: float = 0.0
 var _player: Node3D = null
@@ -101,15 +108,39 @@ func _set_humanoid_color(c: Color) -> void:
 			mat.albedo_color = c
 
 
-func _take_hit() -> void:
+func _resolve_player() -> Node3D:
+	if _player != null and is_instance_valid(_player):
+		return _player
+	_player = get_node_or_null(player_path) as Node3D
+	return _player
+
+
+func _compute_hit_damage_from_player() -> int:
+	var p := _resolve_player()
+	if p == null:
+		return maxi(1, proximity_damage_base)
+	var d := global_position.distance_to(p.global_position)
+	var near_m := proximity_damage_near_m
+	var far_m := proximity_damage_far_m
+	if far_m <= near_m:
+		far_m = near_m + 0.001
+	var t := clampf((far_m - d) / (far_m - near_m), 0.0, 1.0)
+	var mult := lerpf(proximity_damage_far_mult, proximity_damage_close_mult, t)
+	var raw := float(proximity_damage_base) * mult
+	return maxi(1, roundi(raw))
+
+
+func _take_hit(amount: int = 1) -> void:
 	if _dead:
 		return
 	if _invuln > 0.0:
 		return
+	if amount < 1:
+		amount = 1
 	_invuln = damage_invuln_sec
 	_flash = hit_flash_sec
 	_set_humanoid_color(hit_flash_color)
-	_hp -= 1
+	_hp -= amount
 	if _hp <= 0:
 		_die_scatter()
 
@@ -198,7 +229,8 @@ func _on_break_area_body_entered(body: Node) -> void:
 			if away.length_squared() > 0.0001:
 				away = away.normalized()
 				rb.apply_central_impulse(away * 1.25)
-		call_deferred("_take_hit")
+		var dmg := _compute_hit_damage_from_player()
+		call_deferred("_take_hit", dmg)
 		return
 
 	# Враг ломает твои кубы рядом.
