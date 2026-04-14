@@ -5,6 +5,7 @@ const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
 const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 const THROWABLE_COLOR_ENLARGE_HINT := Color(1.0, 0.9, 0.18, 1.0)
+const _GUN_MODEL_LOCAL_POS := Vector3(0.25, -0.22, -0.55)
 const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 	Vector3(-0.35, 0.5, 0),
 	Vector3(0.35, 0.5, 0),
@@ -173,10 +174,10 @@ func _process(_delta: float) -> void:
 			var k := maxf(k_wait, k_fin)
 			if k > 0.0:
 				_gun_node.rotation = Vector3(0.0, 0.0, sin(t * 10.0) * 0.35 * k)
-				_gun_node.position = Vector3(0.25, -0.22, -0.55) + Vector3(0.0, sin(t * 14.0) * 0.02 * k, 0.0)
+				_gun_node.position = _GUN_MODEL_LOCAL_POS + Vector3(0.0, sin(t * 14.0) * 0.02 * k, 0.0)
 			else:
 				_gun_node.rotation = Vector3.ZERO
-				_gun_node.position = Vector3(0.25, -0.22, -0.55)
+				_gun_node.position = _GUN_MODEL_LOCAL_POS
 
 
 func _setup_hp_ui() -> void:
@@ -205,6 +206,8 @@ func _update_hp_ui() -> void:
 		if _gun_enabled:
 			if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
 				_gun_label.text = "GUN: %d/%d  полн. %.1fs" % [_gun_ammo, gun_mag_size, _gun_refill_wait]
+			elif _gun_reload > 0.0:
+				_gun_label.text = "GUN: %d/%d  дозарядка…" % [_gun_ammo, gun_mag_size]
 			else:
 				_gun_label.text = "GUN: %d/%d" % [_gun_ammo, gun_mag_size]
 		else:
@@ -308,11 +311,13 @@ func _unhandled_input(event: InputEvent) -> void:
 					and _gun_ammo > 0
 					and _world_actions_input_ok()
 				):
+					_cancel_gun_finish_reload_anim()
 					_fire_gun_pyramid()
 					_gun_cd = gun_fire_cooldown_sec
 					_gun_ammo -= 1
 					if _gun_ammo < gun_mag_size:
 						_gun_refill_wait = gun_full_refill_delay_sec
+					_update_hp_ui()
 					get_viewport().set_input_as_handled()
 					return
 				if _held:
@@ -446,6 +451,22 @@ func _clear_world_objects() -> void:
 		if node is Node:
 			(node as Node).call_deferred("queue_free")
 
+func _reset_gun_model_idle() -> void:
+	if not _gun_enabled:
+		return
+	_ensure_gun_nodes()
+	if _gun_node:
+		_gun_node.rotation = Vector3.ZERO
+		_gun_node.position = _GUN_MODEL_LOCAL_POS
+
+
+func _cancel_gun_finish_reload_anim() -> void:
+	if _gun_reload <= 0.0:
+		return
+	_gun_reload = 0.0
+	_reset_gun_model_idle()
+
+
 func _toggle_gun() -> void:
 	_gun_enabled = not _gun_enabled
 	if _gun_enabled:
@@ -465,7 +486,7 @@ func _ensure_gun_nodes() -> void:
 	_gun_node = Node3D.new()
 	_gun_node.name = "PyramidGun"
 	_camera.add_child(_gun_node)
-	_gun_node.transform.origin = Vector3(0.25, -0.22, -0.55)
+	_gun_node.transform.origin = _GUN_MODEL_LOCAL_POS
 
 	var mesh_i := MeshInstance3D.new()
 	var bm := BoxMesh.new()
