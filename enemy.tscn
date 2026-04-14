@@ -3,17 +3,17 @@
 [ext_resource type="Script" path="res://enemy.gd" id="1_enemy_script"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_enemy_cube"]
-size = Vector3(0.42, 0.42, 0.42)
+size = Vector3(0.6, 0.6, 0.6)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_enemy"]
 albedo_color = Color(0.95, 0.32, 0.32, 1)
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
-radius = 0.35
-height = 1.05
+radius = 0.55
+height = 1.75
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_break"]
-radius = 1.35
+radius = 1.9
 
 [node name="Enemy" type="CharacterBody3D" groups=["enemy"]]
 script = ExtResource("1_enemy_script")
@@ -22,6 +22,7 @@ script = ExtResource("1_enemy_script")
 shape = SubResource("CapsuleShape3D_enemy")
 
 [node name="Humanoid" type="Node3D" parent="."]
+scale = Vector3(1.25, 1.25, 1.25)
 
 [node name="Cube0" type="MeshInstance3D" parent="Humanoid"]
 mesh = SubResource("BoxMesh_enemy_cube")
