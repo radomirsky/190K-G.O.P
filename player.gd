@@ -103,9 +103,7 @@ func _process(_delta: float) -> void:
 	if vp == null:
 		return
 	var r := vp.get_visible_rect()
-	var center := r.position + r.size * 0.5
-	if vp.get_mouse_position().distance_squared_to(center) > 4.0:
-		vp.warp_mouse(center)
+	vp.warp_mouse(r.position + r.size * 0.5)
 
 
 func _pitch_limit() -> float:
@@ -158,14 +156,9 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			_want_mouse_captured = false
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-			_center_mouse_in_viewport()
-		else:
-			_want_mouse_captured = true
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-			_center_mouse_in_viewport()
+		_want_mouse_captured = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_center_mouse_in_viewport()
 		_look_yaw_target = rotation.y
 		_look_pitch_target = _camera_pivot.rotation.x
 		get_viewport().set_input_as_handled()
