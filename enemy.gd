@@ -21,6 +21,8 @@ extends CharacterBody3D
 @export var proximity_damage_base: int = 1
 @export var proximity_damage_close_mult: float = 2.6
 @export var proximity_damage_far_mult: float = 0.85
+## Урон от кольца стазиса (не зависит от дистанции до игрока — только попадание).
+@export var stasis_hit_damage: int = 2
 
 var _break_cd: float = 0.0
 var _player: Node3D = null
@@ -234,7 +236,11 @@ func _on_break_area_body_entered(body: Node) -> void:
 			if away.length_squared() > 0.0001:
 				away = away.normalized()
 				rb.apply_central_impulse(away * 1.25)
-		var dmg := _compute_hit_damage_from_player()
+		var dmg: int
+		if rb.name == "StasisRing":
+			dmg = maxi(1, stasis_hit_damage)
+		else:
+			dmg = _compute_hit_damage_from_player()
 		call_deferred("_take_hit", dmg)
 		return
 

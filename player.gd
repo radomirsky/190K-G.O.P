@@ -44,7 +44,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export_range(0.4, 20.0, 0.05) var gun_full_refill_delay_sec: float = 6.0
 ## Короткая анимация «дозарядки» на модели пушки после автопополнения.
 @export_range(0.0, 1.0, 0.05) var gun_refill_finish_anim_sec: float = 0.35
-@export var stasis_ring_speed: float = 24.0
+@export var stasis_ring_speed: float = 52.0
 @export var stasis_fire_cooldown_sec: float = 0.18
 @export var stasis_mag_size: int = 5
 @export var stasis_refill_delay_sec: float = 2.0
