@@ -78,6 +78,7 @@ var _hp: int = 100
 var _hp_cd: float = 0.0
 var _hp_layer: CanvasLayer = null
 var _hp_label: Label = null
+var _gun_label: Label = null
 
 
 func _ready() -> void:
@@ -140,6 +141,21 @@ func _process(_delta: float) -> void:
 		_gun_ammo = gun_mag_size
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
+	_update_hp_ui()
+
+	# Анимация перезарядки: лёгкое покачивание/наклон пушки.
+	if _gun_enabled:
+		_ensure_gun_nodes()
+		if _gun_node:
+			if _gun_reload > 0.0:
+				var t := float(Time.get_ticks_msec()) / 1000.0
+				var k := clampf(_gun_reload / maxf(gun_reload_sec, 0.01), 0.0, 1.0)
+				_gun_node.rotation = Vector3(0.0, 0.0, sin(t * 10.0) * 0.35 * k)
+				_gun_node.position = Vector3(0.25, -0.22, -0.55) + Vector3(0.0, sin(t * 14.0) * 0.02 * k, 0.0)
+			else:
+				_gun_node.rotation = Vector3.ZERO
+				_gun_node.position = Vector3(0.25, -0.22, -0.55)
+
 
 func _setup_hp_ui() -> void:
 	if _hp_layer != null:
@@ -152,12 +168,25 @@ func _setup_hp_ui() -> void:
 	_hp_label.position = Vector2(16, 14)
 	_hp_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
 	_hp_layer.add_child(_hp_label)
+	_gun_label = Label.new()
+	_gun_label.text = ""
+	_gun_label.position = Vector2(16, 38)
+	_gun_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	_hp_layer.add_child(_gun_label)
 	_update_hp_ui()
 
 
 func _update_hp_ui() -> void:
 	if _hp_label:
 		_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
+	if _gun_label:
+		if _gun_enabled:
+			if _gun_reload > 0.0:
+				_gun_label.text = "GUN: RELOAD %.1fs" % [_gun_reload]
+			else:
+				_gun_label.text = "GUN: %d/%d" % [_gun_ammo, gun_mag_size]
+		else:
+			_gun_label.text = ""
 
 
 func take_damage(amount: int) -> void:
@@ -167,6 +196,13 @@ func take_damage(amount: int) -> void:
 		return
 	_hp_cd = damage_invuln_sec
 	_hp = clampi(_hp - amount, 0, max_hp)
+	_update_hp_ui()
+
+
+func heal(amount: int) -> void:
+	if amount <= 0:
+		return
+	_hp = clampi(_hp + amount, 0, max_hp)
 	_update_hp_ui()
 
 
@@ -884,6 +920,7 @@ func _spawn_throwable_cube() -> void:
 	cube.tree_exiting.connect(_last_spawned_exit_cb)
 	_update_throwable_visual(cube)
 	ThrowablesBudget.track_throwable(cube)
+	heal(5)
 
 
 func _on_last_spawned_cube_exiting(cube: RigidBody3D) -> void:
@@ -1018,6 +1055,7 @@ func _arrange_cubes_humanoid() -> void:
 		cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		_update_throwable_visual(cube)
 		ThrowablesBudget.track_throwable(cube)
+		heal(5)
 
 
 func _glue_joint_pair_exists(scene: Node, a: RigidBody3D, b: RigidBody3D) -> bool:
