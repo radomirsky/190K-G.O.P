@@ -16,7 +16,7 @@ mass = 0.85
 continuous_cd = true
 script = ExtResource("1_throw_break")
 shatter_piece_count = 4
-next_level_piece_count = 4
+next_level_piece_count = 3
 final_crumb_count = 1
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
