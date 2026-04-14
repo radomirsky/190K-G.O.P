@@ -23,8 +23,12 @@ extends CharacterBody3D
 @export var proximity_damage_far_mult: float = 0.85
 ## Урон от кольца стазиса (не зависит от дистанции до игрока — только попадание).
 @export var stasis_hit_damage: int = 2
+## Сколько залпов обреза нужно, чтобы убить врага с начальным max_hp (урон за залп делится поровну).
+@export_range(1, 12, 1) var sawed_volleys_to_kill: int = 3
 
 var _break_cd: float = 0.0
+var _initial_max_hp: int = 5
+var _last_sawed_volley_id: int = -1
 var _player: Node3D = null
 var _dead: bool = false
 var _hp: int = 5
@@ -57,6 +61,7 @@ func _ready() -> void:
 				got_base = true
 				_base_color = dup.albedo_color
 	_hp = max_hp
+	_initial_max_hp = max_hp
 
 
 func _physics_process(delta: float) -> void:
@@ -140,6 +145,23 @@ func _take_hit(amount: int = 1) -> void:
 	if amount < 1:
 		amount = 1
 	_invuln = damage_invuln_sec
+	_flash = hit_flash_sec
+	_set_humanoid_color(hit_flash_color)
+	_hp -= amount
+	if _hp <= 0:
+		_die_scatter()
+
+
+func _sawed_volley_damage_amount() -> int:
+	return maxi(1, (_initial_max_hp + sawed_volleys_to_kill - 1) / sawed_volleys_to_kill)
+
+
+## Залп обреза: фиксированный урон за выстрел (первое попадание куба из залпа), без i-frames.
+func _take_sawed_volley_hit(amount: int) -> void:
+	if _dead:
+		return
+	if amount < 1:
+		amount = 1
 	_flash = hit_flash_sec
 	_set_humanoid_color(hit_flash_color)
 	_hp -= amount
@@ -232,7 +254,8 @@ func _on_break_area_body_entered(body: Node) -> void:
 	if not rb.is_in_group("throwable"):
 		return
 	var is_stasis_proj := _is_stasis_projectile(rb)
-	if not is_stasis_proj and _break_cd > 0.0:
+	var is_sawed_cube := rb.name == "Cube" and rb.has_meta("_sawed_volley_id")
+	if not is_stasis_proj and not is_sawed_cube and _break_cd > 0.0:
 		return
 
 	# Попали кубом в врага — враг разваливается.
@@ -242,13 +265,12 @@ func _on_break_area_body_entered(body: Node) -> void:
 		or rb.name == "Pyramid"
 		or is_stasis_proj
 	):
-		if not is_stasis_proj:
+		if not is_stasis_proj and not is_sawed_cube:
 			_break_cd = break_cooldown_sec
 		# Снаряд НЕ ломаем — только убиваем врага.
 		# Можно чуть "отпружинить" куб от врага, чтобы было ощущение удара.
 		if is_instance_valid(rb):
-			if rb.name == "Pyramid" or is_stasis_proj:
-				# Снаряд исчезает, когда наносит урон врагу.
+			if rb.name == "Pyramid" or is_stasis_proj or is_sawed_cube:
 				rb.call_deferred("queue_free")
 			var away := (rb.global_position - global_position)
 			away.y = 0.0
@@ -257,6 +279,11 @@ func _on_break_area_body_entered(body: Node) -> void:
 				rb.apply_central_impulse(away * 1.25)
 		if is_stasis_proj:
 			_take_stasis_hit(maxi(1, stasis_hit_damage))
+		elif is_sawed_cube:
+			var svid := int(rb.get_meta("_sawed_volley_id"))
+			if svid != _last_sawed_volley_id:
+				_last_sawed_volley_id = svid
+				_take_sawed_volley_hit(_sawed_volley_damage_amount())
 		else:
 			var dmg: int = _compute_hit_damage_from_player()
 			call_deferred("_take_hit", dmg)

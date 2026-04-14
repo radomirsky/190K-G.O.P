@@ -116,6 +116,7 @@ var _sawed_node: Node3D = null
 var _sawed_muzzle: Node3D = null
 var _sawed_reload: float = 0.0
 var _sawed_refill_wait: float = 0.0
+var _sawed_volley_seq: int = 0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -843,10 +844,13 @@ func _fire_sawed_off() -> void:
 	var right := _camera.global_transform.basis.x
 	var up := _camera.global_transform.basis.y
 	var base_pos := _sawed_muzzle.global_position
+	_sawed_volley_seq += 1
+	var volley_id := _sawed_volley_seq
 	for _i in range(sawed_pellet_count):
 		var cube := THROWABLE_CUBE_SCENE.instantiate() as RigidBody3D
 		cube.set_meta("_player_spawned", true)
 		cube.set_meta("_cube_scale_mul", sawed_pellet_scale)
+		cube.set_meta("_sawed_volley_id", volley_id)
 		scene.add_child(cube)
 		cube.scale = Vector3.ONE * sawed_pellet_scale
 		cube.mass = maxf(0.12, 0.85 * pow(sawed_pellet_scale, 3.0))
