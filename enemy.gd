@@ -10,10 +10,18 @@ extends CharacterBody3D
 @export var touch_distance: float = 2.1
 @export var death_shard_impulse: float = 8.0
 @export var death_shard_up: float = 3.5
+@export var max_hp: int = 3
+@export var damage_invuln_sec: float = 1.25
+@export var hit_flash_sec: float = 1.4
+@export var hit_flash_color: Color = Color(0.18, 0.95, 0.22, 1.0)
 
 var _break_cd: float = 0.0
 var _player: Node3D = null
 var _dead: bool = false
+var _hp: int = 3
+var _invuln: float = 0.0
+var _flash: float = 0.0
+var _base_color: Color = Color(0.95, 0.32, 0.32, 1.0)
 
 @onready var _break_area: Area3D = $BreakArea
 
@@ -22,6 +30,19 @@ func _ready() -> void:
 	_player = get_node_or_null(player_path) as Node3D
 	if _break_area and not _break_area.body_entered.is_connected(_on_break_area_body_entered):
 		_break_area.body_entered.connect(_on_break_area_body_entered)
+	var hum := get_node_or_null("Humanoid") as Node3D
+	if hum:
+		for c in hum.get_children():
+			if c is MeshInstance3D:
+				var mi := c as MeshInstance3D
+				var mat := mi.get_surface_override_material(0) as StandardMaterial3D
+				if mat:
+					# Материал в сцене общий — делаем уникальным для инстанса врага.
+					var dup := mat.duplicate() as StandardMaterial3D
+					mi.set_surface_override_material(0, dup)
+					_base_color = dup.albedo_color
+					break
+	_hp = max_hp
 
 
 func _physics_process(delta: float) -> void:
@@ -33,6 +54,10 @@ func _physics_process(delta: float) -> void:
 		_player = get_node_or_null(player_path) as Node3D
 
 	_break_cd = maxf(_break_cd - delta, 0.0)
+	_invuln = maxf(_invuln - delta, 0.0)
+	_flash = maxf(_flash - delta, 0.0)
+	if _flash <= 0.0:
+		_set_humanoid_color(_base_color)
 
 	velocity.y -= gravity * delta
 
@@ -56,6 +81,32 @@ func _try_damage_player() -> void:
 	if _player.has_method("take_damage"):
 		_break_cd = break_cooldown_sec
 		_player.call("take_damage", touch_damage)
+
+
+func _set_humanoid_color(c: Color) -> void:
+	var hum := get_node_or_null("Humanoid") as Node3D
+	if hum == null:
+		return
+	for child in hum.get_children():
+		if not child is MeshInstance3D:
+			continue
+		var mi := child as MeshInstance3D
+		var mat := mi.get_surface_override_material(0) as StandardMaterial3D
+		if mat:
+			mat.albedo_color = c
+
+
+func _take_hit() -> void:
+	if _dead:
+		return
+	if _invuln > 0.0:
+		return
+	_invuln = damage_invuln_sec
+	_flash = hit_flash_sec
+	_set_humanoid_color(hit_flash_color)
+	_hp -= 1
+	if _hp <= 0:
+		_die_scatter()
 
 
 func _die_scatter() -> void:
@@ -139,7 +190,7 @@ func _on_break_area_body_entered(body: Node) -> void:
 			if away.length_squared() > 0.0001:
 				away = away.normalized()
 				rb.apply_central_impulse(away * 1.25)
-		call_deferred("_die_scatter")
+		call_deferred("_take_hit")
 		return
 
 	# Враг ломает твои кубы рядом.
