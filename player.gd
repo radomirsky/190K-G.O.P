@@ -1158,7 +1158,7 @@ func _ensure_throwable_material(mesh: MeshInstance3D) -> StandardMaterial3D:
 func _update_throwable_visual(rb: RigidBody3D) -> void:
 	if rb == null or not is_instance_valid(rb):
 		return
-	if rb.name == "StasisRing":
+	if rb.name == "StasisRing" or rb.is_in_group("stasis_projectile"):
 		return
 	var mesh := _get_throwable_mesh(rb)
 	if mesh == null:
