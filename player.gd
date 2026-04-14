@@ -34,7 +34,8 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var cube_enlarge_factor: float = 1.15
 @export var cube_enlarge_max_scale: float = 5.0
 @export_range(1, 64, 1) var max_cubes_at_full_enlarge: int = 5
-@export var cube_enlarge_ray_distance: float = 5.0
+## Дальность выбора куба для Shift+E; не меньше aim_ray_length, чтобы целить как по прицелу по всей карте.
+@export var cube_enlarge_ray_distance: float = 48.0
 @export var aim_ray_length: float = 48.0
 @export var look_key_speed: float = 1.85
 @export_range(0.0, 48.0, 0.25) var look_smoothing: float = 14.0
@@ -420,6 +421,10 @@ func _raycast_aimed_enlarge_box(max_dist: float) -> RigidBody3D:
 	return null
 
 
+func _enlarge_pick_ray_distance() -> float:
+	return maxf(cube_enlarge_ray_distance, aim_ray_length)
+
+
 func _count_cubes_at_full_enlarge() -> int:
 	var n := 0
 	var lim := cube_enlarge_max_scale
@@ -441,7 +446,7 @@ func _try_enlarge_cube() -> bool:
 	if _held and _is_enlargeable_brick_box(_held):
 		rb = _held
 	else:
-		rb = _raycast_aimed_enlarge_box(cube_enlarge_ray_distance)
+		rb = _raycast_aimed_enlarge_box(_enlarge_pick_ray_distance())
 	if rb == null:
 		return false
 	_enlarge_cube(rb)
@@ -548,6 +553,7 @@ func _spawn_throwable_cube() -> void:
 	var spawn_pos := global_position + forward * cube_spawn_distance
 	spawn_pos.y = global_position.y + 0.5
 	scene.add_child(cube)
+	cube.set_meta("_player_spawned", true)
 	cube.global_position = spawn_pos
 	cube.linear_velocity = Vector3.ZERO
 	cube.angular_velocity = Vector3.ZERO
@@ -671,6 +677,7 @@ func _arrange_cubes_humanoid() -> void:
 		var world_pos := anchor + yaw_basis * off
 		var cube := THROWABLE_CUBE_SCENE.instantiate() as RigidBody3D
 		scene.add_child(cube)
+		cube.set_meta("_player_spawned", true)
 		cube.global_position = world_pos
 		cube.global_rotation = Vector3.ZERO
 		cube.linear_velocity = Vector3.ZERO
