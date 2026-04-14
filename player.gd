@@ -351,6 +351,18 @@ func _update_hp_ui() -> void:
 				_gun_label.text = "СТАЗИС: %d/%d  дозарядка… [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size]
 			else:
 				_gun_label.text = "СТАЗИС: %d/%d  [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size]
+		elif _equipped == EquippedGun.SAWED_OFF:
+			if _sawed_ammo < sawed_mag_size and _sawed_refill_wait > 0.0:
+				_gun_label.text = "ОБРЕЗ: %d/%d  полн. %.1fs  (залп %d кубов)" % [
+					_sawed_ammo,
+					sawed_mag_size,
+					_sawed_refill_wait,
+					sawed_pellet_count,
+				]
+			elif _sawed_reload > 0.0:
+				_gun_label.text = "ОБРЕЗ: %d/%d  дозарядка…" % [_sawed_ammo, sawed_mag_size]
+			else:
+				_gun_label.text = "ОБРЕЗ: %d/%d  (залп %d кубов)" % [_sawed_ammo, sawed_mag_size, sawed_pellet_count]
 		else:
 			_gun_label.text = ""
 
@@ -460,6 +472,16 @@ func _input(event: InputEvent) -> void:
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
+			if _equipped == EquippedGun.SAWED_OFF and _sawed_cd <= 0.0 and _sawed_ammo > 0:
+				_cancel_sawed_reload_anim()
+				_fire_sawed_off()
+				_sawed_cd = sawed_fire_cooldown_sec
+				_sawed_ammo -= 1
+				if _sawed_ammo < sawed_mag_size:
+					_sawed_refill_wait = sawed_refill_delay_sec
+				_update_hp_ui()
+				get_viewport().set_input_as_handled()
+				return
 			if _held:
 				_throw_press_usec = Time.get_ticks_usec()
 		else:
@@ -539,6 +561,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_F and _world_actions_input_ok():
 			_toggle_stasis()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_H and _world_actions_input_ok():
+			_toggle_sawed_off()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_G
@@ -638,10 +663,13 @@ func _cancel_stasis_reload_anim() -> void:
 func _update_weapon_visibility() -> void:
 	_ensure_gun_nodes()
 	_ensure_stasis_nodes()
+	_ensure_sawed_nodes()
 	if _gun_node:
 		_gun_node.visible = (_equipped == EquippedGun.PYRAMID)
 	if _stasis_node:
 		_stasis_node.visible = (_equipped == EquippedGun.STASIS)
+	if _sawed_node:
+		_sawed_node.visible = (_equipped == EquippedGun.SAWED_OFF)
 
 
 func _toggle_gun() -> void:
@@ -658,6 +686,28 @@ func _toggle_stasis() -> void:
 	else:
 		_equipped = EquippedGun.STASIS
 	_update_weapon_visibility()
+
+
+func _toggle_sawed_off() -> void:
+	if _equipped == EquippedGun.SAWED_OFF:
+		_equipped = EquippedGun.NONE
+	else:
+		_equipped = EquippedGun.SAWED_OFF
+	_update_weapon_visibility()
+
+
+func _reset_sawed_model_idle() -> void:
+	_ensure_sawed_nodes()
+	if _sawed_node:
+		_sawed_node.rotation = Vector3.ZERO
+		_sawed_node.position = _SAWED_GUN_LOCAL_POS
+
+
+func _cancel_sawed_reload_anim() -> void:
+	if _sawed_reload <= 0.0:
+		return
+	_sawed_reload = 0.0
+	_reset_sawed_model_idle()
 
 
 func _ensure_gun_nodes() -> void:
@@ -736,6 +786,87 @@ func _ensure_stasis_nodes() -> void:
 	_stasis_node.add_child(_stasis_muzzle)
 
 	_stasis_node.visible = false
+
+
+func _ensure_sawed_nodes() -> void:
+	if _sawed_node != null and is_instance_valid(_sawed_node):
+		return
+	if _camera == null:
+		return
+	_sawed_node = Node3D.new()
+	_sawed_node.name = "SawedOffGun"
+	_camera.add_child(_sawed_node)
+	_sawed_node.transform.origin = _SAWED_GUN_LOCAL_POS
+
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.42, 0.28, 0.16, 1.0)
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.35, 0.35, 0.38, 1.0)
+
+	var stock := MeshInstance3D.new()
+	var stock_m := BoxMesh.new()
+	stock_m.size = Vector3(0.1, 0.12, 0.22)
+	stock.mesh = stock_m
+	stock.set_surface_override_material(0, wood)
+	stock.position = Vector3(0.0, 0.0, 0.14)
+	_sawed_node.add_child(stock)
+
+	for side in [-1.0, 1.0]:
+		var barrel := MeshInstance3D.new()
+		var bm := CylinderMesh.new()
+		bm.top_radius = 0.038
+		bm.bottom_radius = 0.042
+		bm.height = 0.36
+		bm.radial_segments = 10
+		barrel.mesh = bm
+		barrel.set_surface_override_material(0, metal)
+		barrel.rotation = Vector3(PI / 2.0, 0.0, 0.0)
+		barrel.position = Vector3(side * 0.055, 0.0, -0.14)
+		_sawed_node.add_child(barrel)
+
+	_sawed_muzzle = Node3D.new()
+	_sawed_muzzle.name = "SawedMuzzle"
+	_sawed_muzzle.transform.origin = Vector3(0.0, 0.0, -0.32)
+	_sawed_node.add_child(_sawed_muzzle)
+
+	_sawed_node.visible = false
+
+
+func _fire_sawed_off() -> void:
+	var scene := get_tree().current_scene
+	if scene == null or _camera == null:
+		return
+	_ensure_sawed_nodes()
+	if _sawed_muzzle == null:
+		return
+	var base_dir := _throw_aim_dir()
+	var right := _camera.global_transform.basis.x
+	var up := _camera.global_transform.basis.y
+	var base_pos := _sawed_muzzle.global_position
+	for _i in range(sawed_pellet_count):
+		var cube := THROWABLE_CUBE_SCENE.instantiate() as RigidBody3D
+		cube.set_meta("_player_spawned", true)
+		cube.set_meta("_cube_scale_mul", sawed_pellet_scale)
+		scene.add_child(cube)
+		cube.scale = Vector3.ONE * sawed_pellet_scale
+		cube.mass = maxf(0.12, 0.85 * pow(sawed_pellet_scale, 3.0))
+		cube.global_position = base_pos + right * randf_range(-0.05, 0.05) + up * randf_range(-0.04, 0.04)
+		var jitter := right * randf_range(-sawed_spread_jitter, sawed_spread_jitter)
+		jitter += up * randf_range(-sawed_spread_jitter, sawed_spread_jitter)
+		var dir := (base_dir + jitter).normalized()
+		cube.global_rotation = _camera.global_rotation
+		cube.linear_velocity = dir * sawed_cube_speed
+		cube.angular_velocity = Vector3(
+			randf_range(-6.0, 6.0), randf_range(-6.0, 6.0), randf_range(-6.0, 6.0)
+		)
+		var lbl := cube.get_node_or_null("BrickLabel")
+		if lbl:
+			lbl.queue_free()
+		if _cubes_world_locked:
+			cube.freeze = true
+			cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+		_update_throwable_visual(cube)
+		ThrowablesBudget.track_throwable(cube)
 
 
 func _fire_stasis_ring() -> void:
