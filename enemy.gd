@@ -32,16 +32,21 @@ func _ready() -> void:
 		_break_area.body_entered.connect(_on_break_area_body_entered)
 	var hum := get_node_or_null("Humanoid") as Node3D
 	if hum:
+		var got_base := false
 		for c in hum.get_children():
-			if c is MeshInstance3D:
-				var mi := c as MeshInstance3D
-				var mat := mi.get_surface_override_material(0) as StandardMaterial3D
-				if mat:
-					# Материал в сцене общий — делаем уникальным для инстанса врага.
-					var dup := mat.duplicate() as StandardMaterial3D
-					mi.set_surface_override_material(0, dup)
-					_base_color = dup.albedo_color
-					break
+			if not c is MeshInstance3D:
+				continue
+			var mi := c as MeshInstance3D
+			var mat := mi.get_surface_override_material(0) as StandardMaterial3D
+			if mat == null:
+				continue
+			# Материал в сцене общий — делаем уникальным для КАЖДОГО кубика у этого врага,
+			# чтобы враги не красили друг друга и чтобы "полностью зелёный" работало.
+			var dup := mat.duplicate() as StandardMaterial3D
+			mi.set_surface_override_material(0, dup)
+			if not got_base:
+				got_base = true
+				_base_color = dup.albedo_color
 	_hp = max_hp
 
 
@@ -185,6 +190,9 @@ func _on_break_area_body_entered(body: Node) -> void:
 		# Снаряд НЕ ломаем — только убиваем врага.
 		# Можно чуть "отпружинить" куб от врага, чтобы было ощущение удара.
 		if is_instance_valid(rb):
+			if rb.name == "Pyramid":
+				# Пирамидка исчезает, когда наносит урон врагу.
+				rb.call_deferred("queue_free")
 			var away := (rb.global_position - global_position)
 			away.y = 0.0
 			if away.length_squared() > 0.0001:
