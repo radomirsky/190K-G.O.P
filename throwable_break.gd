@@ -215,8 +215,9 @@ func _on_body_shape_entered(
 		elif other.is_in_group("throwable"):
 			other.call_deferred("queue_free")
 	if self_brick:
-		if not both_bricks:
-			call_deferred("_shatter_and_free")
+		# Кирпичи не ломаем "сами от себя" при столкновении — ломается только один объект (other),
+		# выбранный по instance_id выше.
+		pass
 	elif is_in_group("throwable"):
 		call_deferred("queue_free")
 
