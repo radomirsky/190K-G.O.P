@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://b8stasisring001"]
+[gd_scene format=3 uid="uid://1xt4aru6c4vs"]
 
 [ext_resource type="Script" path="res://throwable_break.gd" id="1_throw_break"]
 
