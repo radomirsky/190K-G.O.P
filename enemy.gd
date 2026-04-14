@@ -10,15 +10,15 @@ extends CharacterBody3D
 @export var touch_distance: float = 2.1
 @export var death_shard_impulse: float = 8.0
 @export var death_shard_up: float = 3.5
-@export var max_hp: int = 3
-@export var damage_invuln_sec: float = 1.25
+@export var max_hp: int = 5
+@export var damage_invuln_sec: float = 0.08
 @export var hit_flash_sec: float = 1.4
 @export var hit_flash_color: Color = Color(0.18, 0.95, 0.22, 1.0)
 
 var _break_cd: float = 0.0
 var _player: Node3D = null
 var _dead: bool = false
-var _hp: int = 3
+var _hp: int = 5
 var _invuln: float = 0.0
 var _flash: float = 0.0
 var _base_color: Color = Color(0.95, 0.32, 0.32, 1.0)
