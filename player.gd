@@ -4,6 +4,7 @@ const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
 const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
+const THROWABLE_COLOR_ENLARGE_HINT := Color(1.0, 0.9, 0.18, 1.0)
 const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 	Vector3(-0.35, 0.5, 0),
 	Vector3(0.35, 0.5, 0),
@@ -48,6 +49,8 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 @onready var _hold_point: Node3D = $CameraPivot/Camera3D/HoldPoint
 
 var _held: RigidBody3D = null
+var _enlarge_hint_rb: RigidBody3D = null
+var _prev_enlarge_hint_rb: RigidBody3D = null
 var _jump_requested: bool = false
 var _throw_press_usec: int = -1
 var _cubes_world_locked: bool = false
@@ -325,7 +328,11 @@ func _physics_process(delta: float) -> void:
 		_held.linear_velocity = Vector3.ZERO
 		_held.angular_velocity = Vector3.ZERO
 
+	_update_enlarge_hint_target()
 	_update_aim_feedback()
+	if _enlarge_hint_rb != _prev_enlarge_hint_rb:
+		_prev_enlarge_hint_rb = _enlarge_hint_rb
+		_refresh_all_throwable_visuals()
 
 
 func _setup_aim_feedback() -> void:
@@ -480,14 +487,26 @@ func _try_enlarge_cube() -> bool:
 	return true
 
 
-func _enlarge_cube(rb: RigidBody3D) -> void:
+func _update_enlarge_hint_target() -> void:
+	var t: RigidBody3D = null
+	if _held and _is_enlargeable_brick_box(_held):
+		t = _held
+	else:
+		t = _raycast_aimed_enlarge_box(_enlarge_pick_ray_distance())
+	if t != null and _enlarge_would_apply(t):
+		_enlarge_hint_rb = t
+	else:
+		_enlarge_hint_rb = null
+
+
+func _enlarge_would_apply(rb: RigidBody3D) -> bool:
 	if rb == null or not is_instance_valid(rb) or not _is_enlargeable_brick_box(rb):
-		return
+		return false
 	var mul: float = float(rb.get_meta("_cube_scale_mul", 1.0))
 	var new_mul := minf(mul * cube_enlarge_factor, cube_enlarge_max_scale)
 	var ratio := new_mul / mul
 	if ratio <= 1.0001:
-		return
+		return false
 	const EPS := 0.03
 	var was_below_full := mul < cube_enlarge_max_scale - EPS
 	var hits_full := new_mul >= cube_enlarge_max_scale - EPS
@@ -496,7 +515,16 @@ func _enlarge_cube(rb: RigidBody3D) -> void:
 		and hits_full
 		and _count_cubes_at_full_enlarge() >= max_cubes_at_full_enlarge
 	):
+		return false
+	return true
+
+
+func _enlarge_cube(rb: RigidBody3D) -> void:
+	if not _enlarge_would_apply(rb):
 		return
+	var mul: float = float(rb.get_meta("_cube_scale_mul", 1.0))
+	var new_mul := minf(mul * cube_enlarge_factor, cube_enlarge_max_scale)
+	var ratio := new_mul / mul
 
 	# Замороженные заспавненные кубы (мир/человекоид): без кадра без freeze коллизия может не обновиться.
 	var restore_frozen_static := (
@@ -533,6 +561,8 @@ func _enlarge_cube(rb: RigidBody3D) -> void:
 		rb.freeze = true
 		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 
+	_update_enlarge_hint_target()
+	_prev_enlarge_hint_rb = _enlarge_hint_rb
 	_refresh_all_throwable_visuals()
 
 
@@ -567,7 +597,9 @@ func _update_throwable_visual(rb: RigidBody3D) -> void:
 	var free_col := THROWABLE_COLOR_FREE
 	if rb.has_meta("_free_albedo"):
 		free_col = rb.get_meta("_free_albedo") as Color
-	if rb == _held:
+	if rb == _enlarge_hint_rb and _enlarge_would_apply(rb):
+		mat.albedo_color = THROWABLE_COLOR_ENLARGE_HINT
+	elif rb == _held:
 		mat.albedo_color = free_col
 	elif rb.freeze:
 		mat.albedo_color = THROWABLE_COLOR_FIXED
