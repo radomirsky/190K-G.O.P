@@ -8,9 +8,8 @@ size = Vector3(0.6, 0.6, 0.6)
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_enemy"]
 albedo_color = Color(0.95, 0.32, 0.32, 1)
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
-radius = 0.55
-height = 1.75
+[sub_resource type="BoxShape3D" id="BoxShape3D_enemy"]
+size = Vector3(3.8, 7.6, 1.2)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_break"]
 radius = 1.9
@@ -19,7 +18,8 @@ radius = 1.9
 script = ExtResource("1_enemy_script")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-shape = SubResource("CapsuleShape3D_enemy")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, 0)
+shape = SubResource("BoxShape3D_enemy")
 
 [node name="Humanoid" type="Node3D" parent="."]
 scale = Vector3(1.25, 1.25, 1.25)
