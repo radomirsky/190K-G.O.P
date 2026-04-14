@@ -1,0 +1,81 @@
+[gd_scene format=3 uid="uid://d0o6y1j1nauqa"]
+
+[ext_resource type="Script" path="res://enemy.gd" id="1_enemy_script"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_enemy_cube"]
+size = Vector3(0.42, 0.42, 0.42)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_enemy"]
+albedo_color = Color(0.95, 0.32, 0.32, 1)
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
+radius = 0.35
+height = 1.05
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_break"]
+radius = 1.35
+
+[node name="Enemy" type="CharacterBody3D" groups=["enemy"]]
+script = ExtResource("1_enemy_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_enemy")
+
+[node name="Humanoid" type="Node3D" parent="."]
+
+[node name="Cube0" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(-0.35, 0.5, 0)
+
+[node name="Cube1" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(0.35, 0.5, 0)
+
+[node name="Cube2" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(-0.35, 1.5, 0)
+
+[node name="Cube3" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(0.35, 1.5, 0)
+
+[node name="Cube4" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(0.0, 2.5, 0)
+
+[node name="Cube5" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(0.0, 3.5, 0)
+
+[node name="Cube6" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(-1.1, 3.7, 0)
+
+[node name="Cube7" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(1.1, 3.7, 0)
+
+[node name="Cube8" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(0.0, 4.7, 0)
+
+[node name="Cube9" type="MeshInstance3D" parent="Humanoid"]
+mesh = SubResource("BoxMesh_enemy_cube")
+surface_material_override/0 = SubResource("StandardMaterial3D_enemy")
+position = Vector3(0.0, 5.7, 0)
+
+[node name="BreakArea" type="Area3D" parent="."]
+collision_layer = 1
+collision_mask = 1
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BreakArea"]
+shape = SubResource("SphereShape3D_break")
