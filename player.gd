@@ -249,6 +249,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		if (
+			(event.keycode == KEY_C or event.physical_keycode == KEY_C)
+			and _world_actions_input_ok()
+		):
+			_clear_world_objects()
+			get_viewport().set_input_as_handled()
+		if (
 			event.keycode == KEY_Q
 			and (event.ctrl_pressed or Input.is_key_pressed(KEY_CTRL))
 			and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
@@ -323,6 +329,18 @@ func _unhandled_input(event: InputEvent) -> void:
 				_try_pickup()
 			get_viewport().set_input_as_handled()
 
+
+func _clear_world_objects() -> void:
+	# Удаляем динамические объекты: кирпичи/осколки/пирамидки и врагов.
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if node is Node:
+			var n := node as Node
+			if n.is_in_group("held_throwable"):
+				continue
+			n.call_deferred("queue_free")
+	for node in get_tree().get_nodes_in_group("enemy"):
+		if node is Node:
+			(node as Node).call_deferred("queue_free")
 
 func _toggle_gun() -> void:
 	_gun_enabled = not _gun_enabled
