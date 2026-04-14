@@ -33,6 +33,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var humanoid_spawn_forward: float = 3.5
 @export var cube_enlarge_factor: float = 1.15
 @export var cube_enlarge_max_scale: float = 5.0
+@export_range(1, 64, 1) var max_cubes_at_full_enlarge: int = 5
 @export var cube_enlarge_ray_distance: float = 5.0
 @export var aim_ray_length: float = 48.0
 @export var look_key_speed: float = 1.85
@@ -401,19 +402,46 @@ func _get_throwable_mesh(rb: RigidBody3D) -> MeshInstance3D:
 	return rb.get_node_or_null("MeshInstance3D") as MeshInstance3D
 
 
-func _raycast_aimed_cube(max_dist: float) -> RigidBody3D:
+func _is_enlargeable_brick_box(rb: RigidBody3D) -> bool:
+	if rb == null:
+		return false
+	if rb.name == "Cube":
+		return true
+	if rb.name.begins_with("BrickShard"):
+		var m := _get_throwable_mesh(rb)
+		return m != null and m.mesh is BoxMesh
+	return false
+
+
+func _raycast_aimed_enlarge_box(max_dist: float) -> RigidBody3D:
 	var rb := _raycast_aimed_throwable(max_dist)
-	if rb != null and rb.name == "Cube":
+	if rb != null and _is_enlargeable_brick_box(rb):
 		return rb
 	return null
 
 
+func _count_cubes_at_full_enlarge() -> int:
+	var n := 0
+	var lim := cube_enlarge_max_scale
+	const EPS := 0.03
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if not node is RigidBody3D:
+			continue
+		var rb := node as RigidBody3D
+		if not _is_enlargeable_brick_box(rb):
+			continue
+		var m := float(rb.get_meta("_cube_scale_mul", 1.0))
+		if m >= lim - EPS:
+			n += 1
+	return n
+
+
 func _try_enlarge_cube() -> bool:
 	var rb: RigidBody3D = null
-	if _held and _held.name == "Cube":
+	if _held and _is_enlargeable_brick_box(_held):
 		rb = _held
 	else:
-		rb = _raycast_aimed_cube(cube_enlarge_ray_distance)
+		rb = _raycast_aimed_enlarge_box(cube_enlarge_ray_distance)
 	if rb == null:
 		return false
 	_enlarge_cube(rb)
@@ -421,12 +449,21 @@ func _try_enlarge_cube() -> bool:
 
 
 func _enlarge_cube(rb: RigidBody3D) -> void:
-	if rb == null or not is_instance_valid(rb) or rb.name != "Cube":
+	if rb == null or not is_instance_valid(rb) or not _is_enlargeable_brick_box(rb):
 		return
 	var mul: float = float(rb.get_meta("_cube_scale_mul", 1.0))
 	var new_mul := minf(mul * cube_enlarge_factor, cube_enlarge_max_scale)
 	var ratio := new_mul / mul
 	if ratio <= 1.0001:
+		return
+	const EPS := 0.03
+	var was_below_full := mul < cube_enlarge_max_scale - EPS
+	var hits_full := new_mul >= cube_enlarge_max_scale - EPS
+	if (
+		was_below_full
+		and hits_full
+		and _count_cubes_at_full_enlarge() >= max_cubes_at_full_enlarge
+	):
 		return
 	rb.set_meta("_cube_scale_mul", new_mul)
 
