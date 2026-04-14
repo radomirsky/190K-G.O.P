@@ -470,6 +470,16 @@ func _enlarge_cube(rb: RigidBody3D) -> void:
 		and _count_cubes_at_full_enlarge() >= max_cubes_at_full_enlarge
 	):
 		return
+
+	# Замороженные заспавненные кубы (мир/человекоид): без кадра без freeze коллизия может не обновиться.
+	var restore_frozen_static := (
+		rb != _held
+		and rb.freeze
+		and rb.freeze_mode == RigidBody3D.FREEZE_MODE_STATIC
+	)
+	if restore_frozen_static:
+		rb.freeze = false
+
 	rb.set_meta("_cube_scale_mul", new_mul)
 
 	var mesh_i := _get_throwable_mesh(rb)
@@ -491,6 +501,11 @@ func _enlarge_cube(rb: RigidBody3D) -> void:
 	var label := rb.get_node_or_null("BrickLabel") as Node3D
 	if label:
 		label.position *= ratio
+
+	if restore_frozen_static:
+		rb.freeze = true
+		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+
 	_refresh_all_throwable_visuals()
 
 
@@ -552,8 +567,8 @@ func _spawn_throwable_cube() -> void:
 		forward = Vector3(0.0, 0.0, -1.0)
 	var spawn_pos := global_position + forward * cube_spawn_distance
 	spawn_pos.y = global_position.y + 0.5
-	scene.add_child(cube)
 	cube.set_meta("_player_spawned", true)
+	scene.add_child(cube)
 	cube.global_position = spawn_pos
 	cube.linear_velocity = Vector3.ZERO
 	cube.angular_velocity = Vector3.ZERO
@@ -676,8 +691,8 @@ func _arrange_cubes_humanoid() -> void:
 	for off in _HUMANOID_CUBE_LOCAL:
 		var world_pos := anchor + yaw_basis * off
 		var cube := THROWABLE_CUBE_SCENE.instantiate() as RigidBody3D
-		scene.add_child(cube)
 		cube.set_meta("_player_spawned", true)
+		scene.add_child(cube)
 		cube.global_position = world_pos
 		cube.global_rotation = Vector3.ZERO
 		cube.linear_velocity = Vector3.ZERO
