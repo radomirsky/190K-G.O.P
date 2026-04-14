@@ -216,13 +216,18 @@ func _on_break_area_body_entered(body: Node) -> void:
 		return
 
 	# Попали кубом в врага — враг разваливается.
-	if rb.name == "Cube" or rb.name.begins_with("BrickShard") or rb.name == "Pyramid":
+	if (
+		rb.name == "Cube"
+		or rb.name.begins_with("BrickShard")
+		or rb.name == "Pyramid"
+		or rb.name == "StasisRing"
+	):
 		_break_cd = break_cooldown_sec
 		# Снаряд НЕ ломаем — только убиваем врага.
 		# Можно чуть "отпружинить" куб от врага, чтобы было ощущение удара.
 		if is_instance_valid(rb):
-			if rb.name == "Pyramid":
-				# Пирамидка исчезает, когда наносит урон врагу.
+			if rb.name == "Pyramid" or rb.name == "StasisRing":
+				# Снаряд исчезает, когда наносит урон врагу.
 				rb.call_deferred("queue_free")
 			var away := (rb.global_position - global_position)
 			away.y = 0.0

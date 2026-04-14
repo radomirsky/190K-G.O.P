@@ -1,11 +1,15 @@
 extends CharacterBody3D
 
+enum EquippedGun { NONE, PYRAMID, STASIS }
+
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
+const THROWABLE_STASIS_RING_SCENE := preload("res://throwable_stasis_ring.tscn")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
 const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 const THROWABLE_COLOR_ENLARGE_HINT := Color(1.0, 0.9, 0.18, 1.0)
 const _GUN_MODEL_LOCAL_POS := Vector3(0.25, -0.22, -0.55)
+const _STASIS_GUN_LOCAL_POS := Vector3(-0.28, -0.2, -0.52)
 const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 	Vector3(-0.35, 0.5, 0),
 	Vector3(0.35, 0.5, 0),
@@ -40,6 +44,12 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export_range(0.4, 20.0, 0.05) var gun_full_refill_delay_sec: float = 6.0
 ## Короткая анимация «дозарядки» на модели пушки после автопополнения.
 @export_range(0.0, 1.0, 0.05) var gun_refill_finish_anim_sec: float = 0.35
+@export var stasis_ring_speed: float = 24.0
+@export var stasis_fire_cooldown_sec: float = 0.18
+@export var stasis_mag_size: int = 5
+@export var stasis_refill_delay_sec: float = 2.0
+@export_range(30.0, 85.0, 0.5) var stasis_aim_fov: float = 38.0
+@export var stasis_aim_fov_smooth: float = 14.0
 @export var dash_speed: float = 14.5
 @export var dash_duration_sec: float = 0.14
 @export var dash_cooldown_sec: float = 0.7
