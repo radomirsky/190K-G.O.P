@@ -1,5 +1,8 @@
 extends RigidBody3D
 
+const CUBE_CHIP_SIZE_RATIO := 1.35
+const CUBE_CHIP_COOLDOWN_USEC := 120_000
+
 @export var destroy_min_relative_speed: float = 0.0
 @export_range(2, 12, 1) var shatter_piece_count: int = 5
 @export var shatter_shard_size: float = 0.38
@@ -22,6 +25,134 @@ func _is_shatter_brick(rb: RigidBody3D) -> bool:
 	)
 
 
+func _cube_scale_mul(rb: RigidBody3D) -> float:
+	if rb.name != "Cube":
+		return 1.0
+	return float(rb.get_meta("_cube_scale_mul", 1.0))
+
+
+func _box_mesh_size(rb: RigidBody3D) -> Vector3:
+	var mesh_i := rb.get_node_or_null("MeshInstance3D") as MeshInstance3D
+	if mesh_i and mesh_i.mesh is BoxMesh:
+		return (mesh_i.mesh as BoxMesh).size
+	return Vector3.ONE
+
+
+func _chip_cube_on_impact(big: RigidBody3D, small: RigidBody3D) -> void:
+	if (
+		not is_instance_valid(big)
+		or not is_instance_valid(small)
+		or big.name != "Cube"
+		or small.name != "Cube"
+	):
+		return
+	var now := Time.get_ticks_usec()
+	var last: int = int(big.get_meta("_last_chip_usec", 0))
+	if now - last < CUBE_CHIP_COOLDOWN_USEC:
+		return
+	big.set_meta("_last_chip_usec", now)
+
+	var parent_node := big.get_parent()
+	if parent_node == null:
+		return
+
+	var mesh_big := big.get_node_or_null("MeshInstance3D") as MeshInstance3D
+	var col_big := big.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if mesh_big == null or col_big == null or not mesh_big.mesh is BoxMesh or not col_big.shape is BoxShape3D:
+		return
+	var big_s := (mesh_big.mesh as BoxMesh).size
+	var vol_big := big_s.x * big_s.y * big_s.z
+	if vol_big < 1e-4:
+		return
+
+	var small_s := _box_mesh_size(small)
+	var chip_edge := clampf(
+		small_s.maxf() * 0.65,
+		big_s.maxf() * 0.07,
+		big_s.maxf() * 0.3
+	)
+	var vol_chip := chip_edge * chip_edge * chip_edge
+	vol_chip = minf(vol_chip, vol_big * 0.22)
+	chip_edge = pow(vol_chip, 1.0 / 3.0)
+	var new_vol := vol_big - vol_chip
+	var new_edge := pow(maxf(new_vol, pow(maxf(big_s.maxf() * 0.32, 0.18), 3.0)), 1.0 / 3.0)
+	vol_chip = vol_big - pow(new_edge, 3.0)
+	chip_edge = pow(maxf(vol_chip, 1e-5), 1.0 / 3.0)
+
+	var away := small.global_position - big.global_position
+	if away.length_squared() < 1e-6:
+		away = big.global_transform.basis * Vector3.FORWARD
+	away = away.normalized()
+	var half := big_s.maxf() * 0.5
+
+	var bm_new := (mesh_big.mesh as BoxMesh).duplicate() as BoxMesh
+	bm_new.size = Vector3(new_edge, new_edge, new_edge)
+	mesh_big.mesh = bm_new
+	var bs_new := (col_big.shape as BoxShape3D).duplicate() as BoxShape3D
+	bs_new.size = Vector3(new_edge, new_edge, new_edge)
+	col_big.shape = bs_new
+
+	var mass_before := big.mass
+	var ratio_m := pow(new_edge, 3.0) / vol_big
+	big.mass *= ratio_m
+	var rdim := new_edge / big_s.x
+	if big.has_method("_shatter_and_free"):
+		big.shatter_shard_size *= rdim
+		big.min_shard_size *= rdim
+	var mul_meta := _cube_scale_mul(big) * rdim
+	big.set_meta("_cube_scale_mul", mul_meta)
+
+	var label := big.get_node_or_null("BrickLabel") as Node3D
+	if label:
+		label.position *= rdim
+
+	var mat_col := Color(0.42, 0.62, 0.92, 1.0)
+	if mesh_big.get_surface_override_material(0) is StandardMaterial3D:
+		mat_col = (mesh_big.get_surface_override_material(0) as StandardMaterial3D).albedo_color
+	elif mesh_big.mesh:
+		var smat: Material = mesh_big.mesh.surface_get_material(0)
+		if smat is StandardMaterial3D:
+			mat_col = (smat as StandardMaterial3D).albedo_color
+
+	var scr: Script = load("res://throwable_break.gd") as Script
+	var chip := RigidBody3D.new()
+	chip.set_script(scr)
+	chip.name = "BrickShard_%d_chip" % small.get_instance_id()
+	chip.shatter_shard_size = maxf(chip_edge * 0.55, 0.07)
+	chip.shatter_piece_count = 3
+	chip.next_level_piece_count = 0
+	chip.min_shard_size = maxf(chip.shatter_shard_size * 0.35, 0.06)
+	chip.final_crumb_count = big.final_crumb_count
+	chip.destroy_min_relative_speed = big.destroy_min_relative_speed
+	chip.shatter_outward_impulse = big.shatter_outward_impulse * 0.85
+	chip.mass = clampf(mass_before * (vol_chip / vol_big), 0.03, 2.5)
+	chip.continuous_cd = true
+	var mesh_c := MeshInstance3D.new()
+	var bmc := BoxMesh.new()
+	bmc.size = Vector3(chip_edge, chip_edge, chip_edge)
+	mesh_c.mesh = bmc
+	var mchip := StandardMaterial3D.new()
+	mchip.albedo_color = mat_col
+	mesh_c.set_surface_override_material(0, mchip)
+	var col_c := CollisionShape3D.new()
+	var bsc := BoxShape3D.new()
+	bsc.size = Vector3(chip_edge, chip_edge, chip_edge)
+	col_c.shape = bsc
+	chip.add_child(mesh_c)
+	chip.add_child(col_c)
+	chip.add_to_group("throwable")
+	parent_node.add_child(chip)
+	ThrowablesBudget.track_throwable(chip)
+	chip.global_position = big.global_position + away * (half + chip_edge * 0.52)
+	var rel_v := small.linear_velocity - big.linear_velocity
+	chip.linear_velocity = away * 5.5 + rel_v * 0.55 + big.linear_velocity * 0.25
+	chip.angular_velocity = Vector3(
+		randf_range(-5.0, 5.0), randf_range(-4.0, 5.0), randf_range(-5.0, 5.0)
+	)
+
+	small.queue_free()
+
+
 func _on_body_shape_entered(
 	_body_rid: RID,
 	body: Node,
@@ -39,6 +170,18 @@ func _on_body_shape_entered(
 	if body == self:
 		return
 	var other := body as RigidBody3D
+	if self.name == "Cube" and other.name == "Cube":
+		var sm := _cube_scale_mul(self)
+		var om := _cube_scale_mul(other)
+		var lo := minf(sm, om)
+		var hi := maxf(sm, om)
+		if hi >= lo * CUBE_CHIP_SIZE_RATIO:
+			if get_instance_id() < other.get_instance_id():
+				return
+			var big: RigidBody3D = self if sm > om else other
+			var small: RigidBody3D = other if sm > om else self
+			call_deferred("_chip_cube_on_impact", big, small)
+			return
 	if other.is_in_group("held_throwable"):
 		var keep := linear_velocity
 		call_deferred("_restore_velocity", keep)
@@ -51,6 +194,7 @@ func _on_body_shape_entered(
 	var op := other.linear_velocity.length()
 	const IDLE_SPD := 0.02
 	const IDLE_REL := 0.035
+
 	if not both_bricks:
 		if sp < IDLE_SPD and op < IDLE_SPD and rel < IDLE_REL:
 			return
