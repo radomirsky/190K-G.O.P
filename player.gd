@@ -165,13 +165,13 @@ func _center_mouse_in_viewport() -> void:
 
 
 func _process(_delta: float) -> void:
-	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED or not _want_mouse_captured:
-		return
-	var vp := get_viewport()
-	if vp == null:
-		return
-	var r := vp.get_visible_rect()
-	vp.warp_mouse(r.position + r.size * 0.5)
+	# Захват курсора — только в этом режиме фиксируем мышь в центре (FPS).
+	# Таймеры и UI крутятся всегда, иначе при видимом курсоре оружие/перезарядка замирают.
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _want_mouse_captured:
+		var vp_warp := get_viewport()
+		if vp_warp:
+			var rw := vp_warp.get_visible_rect()
+			vp_warp.warp_mouse(rw.position + rw.size * 0.5)
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
 	_gun_reload = maxf(_gun_reload - _delta, 0.0)
 	if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
@@ -377,6 +377,18 @@ func _world_actions_input_ok() -> bool:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		_jump_requested = true
+	# Поворот камеры из движения мыши — в _input, чтобы срабатывало без ПКМ и до GUI.
+	if event is InputEventMouseMotion:
+		var mm := Input.mouse_mode
+		if (
+			mm == Input.MOUSE_MODE_CAPTURED
+			or mm == Input.MOUSE_MODE_VISIBLE
+			or mm == Input.MOUSE_MODE_CONFINED
+		):
+			_look_yaw_target -= event.relative.x * mouse_sensitivity
+			_look_pitch_target = _clamp_pitch_target(
+				_look_pitch_target - event.relative.y * mouse_sensitivity
+			)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -387,16 +399,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_look_yaw_target = rotation.y
 		_look_pitch_target = _camera_pivot.rotation.x
 		get_viewport().set_input_as_handled()
-
-	if event is InputEventMouseMotion:
-		if (
-			Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			or Input.mouse_mode == Input.MOUSE_MODE_VISIBLE
-		):
-			_look_yaw_target -= event.relative.x * mouse_sensitivity
-			_look_pitch_target = _clamp_pitch_target(
-				_look_pitch_target - event.relative.y * mouse_sensitivity
-			)
 
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if (
