@@ -1,6 +1,6 @@
 extends CharacterBody3D
 
-enum EquippedGun { NONE, PYRAMID, STASIS }
+enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF }
 
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
@@ -10,6 +10,7 @@ const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 const THROWABLE_COLOR_ENLARGE_HINT := Color(1.0, 0.9, 0.18, 1.0)
 const _GUN_MODEL_LOCAL_POS := Vector3(0.25, -0.22, -0.55)
 const _STASIS_GUN_LOCAL_POS := Vector3(-0.28, -0.2, -0.52)
+const _SAWED_GUN_LOCAL_POS := Vector3(0.22, -0.21, -0.48)
 const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 	Vector3(-0.35, 0.5, 0),
 	Vector3(0.35, 0.5, 0),
@@ -57,6 +58,14 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 ## Подвод оружия к камере при ПКМ (в локале камеры).
 @export var stasis_aim_model_offset: Vector3 = Vector3(0.2, -0.07, 0.16)
 @export var stasis_aim_pos_smooth: float = 18.0
+@export_range(3, 20, 1) var sawed_pellet_count: int = 8
+@export var sawed_spread_jitter: float = 0.16
+@export var sawed_cube_speed: float = 36.0
+@export_range(0.2, 0.55, 0.01) var sawed_pellet_scale: float = 0.34
+@export var sawed_fire_cooldown_sec: float = 0.9
+@export var sawed_mag_size: int = 6
+@export var sawed_refill_delay_sec: float = 3.5
+@export_range(0.0, 2.0, 0.05) var sawed_refill_finish_anim_sec: float = 0.4
 @export var dash_speed: float = 14.5
 @export var dash_duration_sec: float = 0.14
 @export var dash_cooldown_sec: float = 0.7
@@ -101,6 +110,12 @@ var _stasis_reload: float = 0.0
 var _stasis_refill_wait: float = 0.0
 var _stasis_ring_visual: MeshInstance3D = null
 var _stasis_ads_blend: float = 0.0
+var _sawed_ammo: int = 6
+var _sawed_cd: float = 0.0
+var _sawed_node: Node3D = null
+var _sawed_muzzle: Node3D = null
+var _sawed_reload: float = 0.0
+var _sawed_refill_wait: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -135,6 +150,7 @@ func _ready() -> void:
 	_hp = max_hp
 	_gun_ammo = gun_mag_size
 	_stasis_ammo = stasis_mag_size
+	_sawed_ammo = sawed_mag_size
 
 
 func _exit_tree() -> void:
@@ -190,6 +206,15 @@ func _process(_delta: float) -> void:
 			_stasis_refill_wait = 0.0
 			if stasis_refill_finish_anim_sec > 0.0:
 				_stasis_reload = stasis_refill_finish_anim_sec
+	_sawed_cd = maxf(_sawed_cd - _delta, 0.0)
+	_sawed_reload = maxf(_sawed_reload - _delta, 0.0)
+	if _sawed_ammo < sawed_mag_size and _sawed_refill_wait > 0.0:
+		_sawed_refill_wait = maxf(_sawed_refill_wait - _delta, 0.0)
+		if _sawed_refill_wait <= 0.0:
+			_sawed_ammo = sawed_mag_size
+			_sawed_refill_wait = 0.0
+			if sawed_refill_finish_anim_sec > 0.0:
+				_sawed_reload = sawed_refill_finish_anim_sec
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -268,6 +293,23 @@ func _process(_delta: float) -> void:
 				_stasis_node.position = _STASIS_GUN_LOCAL_POS + ads_ofs
 				_stasis_ring_visual.rotation = Vector3.ZERO
 				_stasis_ring_visual.scale = Vector3.ONE
+	elif _equipped == EquippedGun.SAWED_OFF:
+		_ensure_sawed_nodes()
+		if _sawed_node:
+			var ts := float(Time.get_ticks_msec()) / 1000.0
+			var kw := 0.0
+			if _sawed_ammo < sawed_mag_size and _sawed_refill_wait > 0.0:
+				kw = clampf(_sawed_refill_wait / maxf(sawed_refill_delay_sec, 0.01), 0.0, 1.0)
+			var kf := 0.0
+			if _sawed_reload > 0.0:
+				kf = clampf(_sawed_reload / maxf(sawed_refill_finish_anim_sec, 0.01), 0.0, 1.0)
+			var ks := maxf(kw, kf)
+			if ks > 0.0:
+				_sawed_node.rotation = Vector3(sin(ts * 11.0) * 0.12 * ks, 0.0, sin(ts * 9.0) * 0.22 * ks)
+				_sawed_node.position = _SAWED_GUN_LOCAL_POS + Vector3(0.0, sin(ts * 13.0) * 0.018 * ks, 0.0)
+			else:
+				_sawed_node.rotation = Vector3.ZERO
+				_sawed_node.position = _SAWED_GUN_LOCAL_POS
 
 
 func _setup_hp_ui() -> void:
