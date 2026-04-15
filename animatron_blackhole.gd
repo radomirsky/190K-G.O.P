@@ -176,12 +176,13 @@ func _spawn_explosion_visual(parent: Node, at: Vector3) -> void:
 	lit.omni_range = explosion_radius * 1.35
 	root.add_child(lit)
 
-	var cpu := CPUParticles3D.new()
-	cpu.one_shot = true
-	cpu.explosiveness = 0.94
-	cpu.amount = 56
-	cpu.lifetime = 0.52
-	cpu.emitting = false
+	# ParticleProcessMaterial только у GPUParticles3D (у CPUParticles3D в Godot 4 нет process_material).
+	var gpu := GPUParticles3D.new()
+	gpu.one_shot = true
+	gpu.explosiveness = 0.94
+	gpu.amount = 56
+	gpu.lifetime = 0.52
+	gpu.emitting = false
 	var pmat := ParticleProcessMaterial.new()
 	pmat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	pmat.emission_sphere_radius = 0.65
@@ -193,10 +194,10 @@ func _spawn_explosion_visual(parent: Node, at: Vector3) -> void:
 	pmat.scale_min = 0.1
 	pmat.scale_max = 0.42
 	pmat.color = Color(0.4, 0.78, 1.0)
-	cpu.process_material = pmat
+	gpu.process_material = pmat
 	var qm := QuadMesh.new()
 	qm.size = Vector2(0.38, 0.38)
-	cpu.draw_pass_1 = qm
+	gpu.draw_pass_1 = qm
 	var pvis := StandardMaterial3D.new()
 	pvis.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	pvis.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
@@ -205,9 +206,9 @@ func _spawn_explosion_visual(parent: Node, at: Vector3) -> void:
 	pvis.emission_energy_multiplier = 2.2
 	pvis.albedo_color = Color(1, 1, 1, 0.9)
 	pvis.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	cpu.material_override = pvis
-	root.add_child(cpu)
-	cpu.emitting = true
+	gpu.material_override = pvis
+	root.add_child(gpu)
+	gpu.emitting = true
 
 	var tw := root.create_tween()
 	tw.set_parallel(true)
