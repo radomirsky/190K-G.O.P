@@ -1,0 +1,61 @@
+[gd_scene load_steps=7 format=3 uid="uid://c8worldshop01"]
+
+[ext_resource type="Script" path="res://world_shop.gd" id="1_world_shop"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_counter"]
+size = Vector3(3.2, 1.15, 2.0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_counter"]
+albedo_color = Color(0.82, 0.62, 0.28, 1)
+roughness = 0.55
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_counter"]
+size = Vector3(3.2, 1.15, 2.0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_zone"]
+size = Vector3(5.5, 2.8, 5.5)
+
+[node name="WorldShop" type="Node3D"]
+script = ExtResource("1_world_shop")
+
+[node name="Counter" type="StaticBody3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Counter"]
+mesh = SubResource("BoxMesh_counter")
+surface_material_override/0 = SubResource("StandardMaterial3D_counter")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Counter"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.575, 0)
+shape = SubResource("BoxShape3D_counter")
+
+[node name="Awning" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 1.85, -0.35)
+mesh = SubResource("BoxMesh_counter")
+surface_material_override/0 = SubResource("StandardMaterial3D_counter")
+
+[node name="Trigger" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 1
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Trigger"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 2.1)
+shape = SubResource("BoxShape3D_zone")
+
+[node name="LabelSign" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.05, -0.15)
+billboard = 0
+text = "МАГАЗИН"
+font_size = 52
+outline_size = 10
+outline_modulate = Color(0.05, 0.04, 0.02, 0.92)
+modulate = Color(1, 0.92, 0.75, 1)
+
+[node name="LabelMama" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.45, 0.95)
+billboard = 1
+text = "Валюта — МАМА"
+font_size = 32
+outline_size = 8
+outline_modulate = Color(0.08, 0.05, 0.12, 0.9)
+modulate = Color(1, 0.78, 0.88, 1)
