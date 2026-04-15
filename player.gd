@@ -1383,10 +1383,11 @@ func _ensure_stasis_nodes() -> void:
 
 	var ring_mesh := MeshInstance3D.new()
 	var tm := TorusMesh.new()
-	tm.inner_radius = 0.07
-	tm.outer_radius = 0.13
-	tm.rings = 2
-	tm.ring_segments = 20
+	# Godot 4: TorusMesh использует ring_radius/pipe_radius и *_sides.
+	tm.ring_radius = 0.11
+	tm.pipe_radius = 0.03
+	tm.ring_sides = 20
+	tm.pipe_sides = 10
 	ring_mesh.mesh = tm
 	var smat := StandardMaterial3D.new()
 	smat.albedo_color = Color(0.35, 0.55, 0.98, 1.0)
