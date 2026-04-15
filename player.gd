@@ -1086,6 +1086,7 @@ func _fire_stasis_ring() -> void:
 		ring.freeze = true
 		ring.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	ThrowablesBudget.track_throwable(ring)
+	_snap_throwable_if_world_time_frozen(ring)
 
 
 func _fire_gun_pyramid() -> void:
@@ -1106,6 +1107,7 @@ func _fire_gun_pyramid() -> void:
 		pyr.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	_update_throwable_visual(pyr)
 	ThrowablesBudget.track_throwable(pyr)
+	_snap_throwable_if_world_time_frozen(pyr)
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
@@ -1582,6 +1584,7 @@ func _spawn_throwable_cube() -> void:
 	cube.tree_exiting.connect(_last_spawned_exit_cb)
 	_update_throwable_visual(cube)
 	ThrowablesBudget.track_throwable(cube)
+	_snap_throwable_if_world_time_frozen(cube)
 	heal(5)
 
 
@@ -1612,6 +1615,7 @@ func _spawn_throwable_pyramid() -> void:
 		pyr.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	_update_throwable_visual(pyr)
 	ThrowablesBudget.track_throwable(pyr)
+	_snap_throwable_if_world_time_frozen(pyr)
 
 
 func _toggle_cubes_world_lock() -> void:
@@ -1790,6 +1794,7 @@ func _arrange_cubes_humanoid() -> void:
 		cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		_update_throwable_visual(cube)
 		ThrowablesBudget.track_throwable(cube)
+		_snap_throwable_if_world_time_frozen(cube)
 		heal(5)
 
 
@@ -1896,6 +1901,7 @@ func _apply_throw_body(body: RigidBody3D, dir: Vector3, speed: float) -> void:
 	_held = null
 	_throw_press_usec = -1
 	_update_throwable_visual(body)
+	_snap_throwable_if_world_time_frozen(body)
 
 
 func _throw_held_tap() -> void:
