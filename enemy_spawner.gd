@@ -60,8 +60,13 @@ func _process(delta: float) -> void:
 		return
 	_t = 0.0
 
-	# Ограничиваем количество живых врагов.
-	if get_tree().get_nodes_in_group("enemy").size() >= max_alive:
+	# Ограничиваем количество живых обычных врагов (босс не считается).
+	var n_alive := 0
+	for node in get_tree().get_nodes_in_group("enemy"):
+		if node is Node and (node as Node).is_in_group("boss"):
+			continue
+		n_alive += 1
+	if n_alive >= max_alive:
 		return
 
 	_spawn_enemy()

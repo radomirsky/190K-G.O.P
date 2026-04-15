@@ -131,9 +131,29 @@ var _hp_cd: float = 0.0
 var _hp_layer: CanvasLayer = null
 var _hp_label: Label = null
 var _gun_label: Label = null
+var _mama_hud: Label = null
+var _shop_open: bool = false
+var _shop_layer: CanvasLayer = null
+
+
+func _eff_gun_mag() -> int:
+	return gun_mag_size + GameProgress.up_pyramid_mag * 2
+
+
+func _eff_gun_refill_delay() -> float:
+	return gun_full_refill_delay_sec * pow(0.88, float(GameProgress.up_pyramid_reload))
+
+
+func _eff_sawed_pellets() -> int:
+	return sawed_pellet_count + GameProgress.up_sawed_pellets
+
+
+func _clamp_gun_ammo_to_effective() -> void:
+	_gun_ammo = mini(_gun_ammo, _eff_gun_mag())
 
 
 func _ready() -> void:
+	add_to_group("player")
 	if _camera:
 		_camera.fov = camera_fov
 	_want_mouse_captured = true
@@ -146,10 +166,17 @@ func _ready() -> void:
 			win.focus_entered.connect(cb)
 	call_deferred("_setup_aim_feedback")
 	call_deferred("_setup_hp_ui")
+	call_deferred("_setup_shop_ui")
+	if not GameProgress.mama_changed.is_connected(_on_mama_or_upgrades_changed):
+		GameProgress.mama_changed.connect(_on_mama_or_upgrades_changed)
+	if not GameProgress.upgrades_changed.is_connected(_on_mama_or_upgrades_changed):
+		GameProgress.upgrades_changed.connect(_on_mama_or_upgrades_changed)
+	if not GameProgress.kills_changed.is_connected(_on_mama_or_upgrades_changed):
+		GameProgress.kills_changed.connect(_on_mama_or_upgrades_changed)
 	_look_yaw_target = rotation.y
 	_look_pitch_target = _camera_pivot.rotation.x
 	_hp = max_hp
-	_gun_ammo = gun_mag_size
+	_gun_ammo = _eff_gun_mag()
 	_stasis_ammo = stasis_mag_size
 	_sawed_ammo = sawed_mag_size
 
@@ -168,6 +195,8 @@ func _notification(what: int) -> void:
 func _restore_mouse_capture_after_focus() -> void:
 	if not is_inside_tree():
 		return
+	if _shop_open:
+		return
 	if _want_mouse_captured:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_center_mouse_in_viewport()
@@ -184,17 +213,21 @@ func _center_mouse_in_viewport() -> void:
 func _process(_delta: float) -> void:
 	# Захват курсора — только в этом режиме фиксируем мышь в центре (FPS).
 	# Таймеры и UI крутятся всегда, иначе при видимом курсоре оружие/перезарядка замирают.
-	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _want_mouse_captured:
+	if (
+		not _shop_open
+		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		and _want_mouse_captured
+	):
 		var vp_warp := get_viewport()
 		if vp_warp:
 			var rw := vp_warp.get_visible_rect()
 			vp_warp.warp_mouse(rw.position + rw.size * 0.5)
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
 	_gun_reload = maxf(_gun_reload - _delta, 0.0)
-	if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
+	if _gun_ammo < _eff_gun_mag() and _gun_refill_wait > 0.0:
 		_gun_refill_wait = maxf(_gun_refill_wait - _delta, 0.0)
 		if _gun_refill_wait <= 0.0:
-			_gun_ammo = gun_mag_size
+			_gun_ammo = _eff_gun_mag()
 			_gun_refill_wait = 0.0
 			if gun_refill_finish_anim_sec > 0.0:
 				_gun_reload = gun_refill_finish_anim_sec
