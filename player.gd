@@ -822,6 +822,9 @@ func _grapple_try_melee() -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+		if _grapple_state != GrappleState.INACTIVE:
+			_clear_grapple()
+			get_viewport().set_input_as_handled()
 		_jump_requested = true
 	# Поворот камеры из движения мыши — в _input, чтобы срабатывало без ПКМ и до GUI.
 	if event is InputEventMouseButton:
