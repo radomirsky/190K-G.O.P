@@ -28,8 +28,6 @@ func _on_boss_spawn_requested() -> void:
 		_player = get_node_or_null(player_path) as Node3D
 		if _player == null:
 			return
-	if get_tree().get_nodes_in_group("boss").size() > 0:
-		return
 	var b := enemy_scene.instantiate() as CharacterBody3D
 	if b == null:
 		return

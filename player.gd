@@ -206,6 +206,27 @@ func _eff_grapple_melee_damage() -> int:
 	return grapple_melee_damage + GameProgress.up_grapple_damage
 
 
+func _eff_animatron_reload_sec() -> float:
+	var t := animatron_reload_sec - float(GameProgress.up_animatron_reload) * 3.5
+	return maxf(t, 8.0)
+
+
+func _eff_animatron_suck_radius() -> float:
+	return animatron_suck_radius * (1.0 + float(GameProgress.up_animatron_vortex) * 0.12)
+
+
+func _eff_animatron_suck_accel() -> float:
+	return animatron_suck_accel * (1.0 + float(GameProgress.up_animatron_vortex) * 0.15)
+
+
+func _eff_animatron_explosion_radius() -> float:
+	return animatron_explosion_radius + float(GameProgress.up_animatron_blast) * 2.5
+
+
+func _eff_animatron_explosion_damage() -> int:
+	return animatron_explosion_damage + GameProgress.up_animatron_blast
+
+
 func _clamp_gun_ammo_to_effective() -> void:
 	_gun_ammo = mini(_gun_ammo, _eff_gun_mag())
 
@@ -409,7 +430,7 @@ func _process(_delta: float) -> void:
 			var ta := float(Time.get_ticks_msec()) / 1000.0
 			var k := 0.0
 			if _animatron_cd > 0.0:
-				k = clampf(_animatron_cd / maxf(animatron_reload_sec, 0.01), 0.0, 1.0)
+				k = clampf(_animatron_cd / maxf(_eff_animatron_reload_sec(), 0.01), 0.0, 1.0)
 			_animatron_node.rotation = Vector3(0.0, 0.0, sin(ta * 8.0) * 0.28 * k)
 			_animatron_node.position = _ANIMATRON_MODEL_LOCAL_POS + Vector3(0.0, sin(ta * 13.0) * 0.02 * k, 0.0)
 			var ring := _animatron_node.get_node_or_null("Ring") as MeshInstance3D
@@ -495,9 +516,13 @@ func _update_hp_ui() -> void:
 		else:
 			_gun_label.text = ""
 	if _mama_hud:
-		_mama_hud.text = "МАМА: %d   Убийств: %d (босс на 10)" % [
+		var r := GameProgress.regular_kills % GameProgress.KILLS_FOR_BOSS
+		var until_boss := GameProgress.KILLS_FOR_BOSS - r if r != 0 else GameProgress.KILLS_FOR_BOSS
+		_mama_hud.text = "МАМА: %d   Убийств: %d (босс каждые %d; до след.: %d)" % [
 			GameProgress.mama_tokens,
 			GameProgress.regular_kills,
+			GameProgress.KILLS_FOR_BOSS,
+			until_boss,
 		]
 
 
@@ -518,7 +543,7 @@ func _setup_shop_ui() -> void:
 	panel.offset_left = -250.0
 	panel.offset_top = 72.0
 	panel.offset_right = 250.0
-	panel.offset_bottom = 430.0
+	panel.offset_bottom = 540.0
 	_shop_layer.add_child(panel)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -538,7 +563,18 @@ func _setup_shop_ui() -> void:
 	info.name = "ShopInfo"
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(info)
-	for key in ["pyramid_mag", "pyramid_reload", "stasis_dmg", "sawed_pellets", "grapple_range", "grapple_pull", "grapple_damage"]:
+	for key in [
+		"pyramid_mag",
+		"pyramid_reload",
+		"stasis_dmg",
+		"sawed_pellets",
+		"grapple_range",
+		"grapple_pull",
+		"grapple_damage",
+		"animatron_reload",
+		"animatron_vortex",
+		"animatron_blast",
+	]:
 		var btn := Button.new()
 		btn.name = "Btn_" + key
 		btn.custom_minimum_size = Vector2(420, 32)
@@ -552,13 +588,15 @@ func _refresh_shop_buttons() -> void:
 		return
 	var info := _shop_layer.find_child("ShopInfo", true, false) as Label
 	if info:
+		var r2 := GameProgress.regular_kills % GameProgress.KILLS_FOR_BOSS
+		var kills_until_next := GameProgress.KILLS_FOR_BOSS - r2 if r2 != 0 else GameProgress.KILLS_FOR_BOSS
 		info.text = (
-			"Жетоны «МАМА» — валюта: подбери дроп или с босса (×%d). Сейчас: %d. Убийств до босса: %d / %d. Киоск на краю арены открывает этот магазин при входе."
+			"Жетоны «МАМА» — валюта: подбери дроп или с босса (×%d). Сейчас: %d. Босс на каждом %d-м убийстве; до следующего: %d. Киоск на краю арены открывает этот магазин при входе."
 			% [
 				GameProgress.BOSS_MAMA_PICKUP_COUNT,
 				GameProgress.mama_tokens,
-				GameProgress.regular_kills,
 				GameProgress.KILLS_FOR_BOSS,
+				kills_until_next,
 			]
 		)
 	_set_shop_btn(
@@ -600,6 +638,24 @@ func _refresh_shop_buttons() -> void:
 		GameProgress.up_grapple_damage,
 		GameProgress.COST_GRAPPLE_DAMAGE
 	)
+	_set_shop_btn(
+		"Btn_animatron_reload",
+		"Аниматрон: быстрее перезарядка (−3.5 с за ур., мин. 8 с)",
+		GameProgress.up_animatron_reload,
+		GameProgress.COST_ANIMATRON_RELOAD
+	)
+	_set_shop_btn(
+		"Btn_animatron_vortex",
+		"Аниматрон: сильнее воронка (+12% радиус, +15% тяга за ур.)",
+		GameProgress.up_animatron_vortex,
+		GameProgress.COST_ANIMATRON_VORTEX
+	)
+	_set_shop_btn(
+		"Btn_animatron_blast",
+		"Аниматрон: мощнее взрыв (+2.5 м радиус, +1 урон за ур.)",
+		GameProgress.up_animatron_blast,
+		GameProgress.COST_ANIMATRON_BLAST
+	)
 
 
 func _set_shop_btn(node_name: String, title: String, tier: int, cost: int) -> void:
@@ -632,6 +688,12 @@ func _on_shop_buy_pressed(which: String) -> void:
 			ok = GameProgress.try_buy_grapple_pull()
 		"grapple_damage":
 			ok = GameProgress.try_buy_grapple_damage()
+		"animatron_reload":
+			ok = GameProgress.try_buy_animatron_reload()
+		"animatron_vortex":
+			ok = GameProgress.try_buy_animatron_vortex()
+		"animatron_blast":
+			ok = GameProgress.try_buy_animatron_blast()
 	if ok:
 		_clamp_gun_ammo_to_effective()
 	_refresh_shop_buttons()
@@ -1008,7 +1070,7 @@ func _input(event: InputEvent) -> void:
 				return
 			if _equipped == EquippedGun.ANIMATRON and _animatron_cd <= 0.0:
 				_fire_animatron_blackhole()
-				_animatron_cd = animatron_reload_sec
+				_animatron_cd = _eff_animatron_reload_sec()
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
@@ -1613,12 +1675,12 @@ func _fire_animatron_blackhole() -> void:
 	bh.global_position = from + dir * 1.25
 	if bh.has_method("set"):
 		bh.set("lifetime_sec", animatron_blackhole_lifetime_sec)
-		bh.set("suck_radius", animatron_suck_radius)
-		bh.set("suck_accel", animatron_suck_accel)
+		bh.set("suck_radius", _eff_animatron_suck_radius())
+		bh.set("suck_accel", _eff_animatron_suck_accel())
 		bh.set("suck_up", animatron_suck_up)
 		bh.set("fly_speed", animatron_blackhole_fly_speed)
-		bh.set("explosion_radius", animatron_explosion_radius)
-		bh.set("explosion_damage", animatron_explosion_damage)
+		bh.set("explosion_radius", _eff_animatron_explosion_radius())
+		bh.set("explosion_damage", _eff_animatron_explosion_damage())
 		bh.set("explosion_knockback", animatron_explosion_knockback)
 	if bh.has_method("set_initial_velocity"):
 		bh.call("set_initial_velocity", dir * animatron_blackhole_fly_speed)

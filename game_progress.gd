@@ -15,11 +15,15 @@ const COST_SAWED_PELLETS := 5
 const COST_GRAPPLE_RANGE := 5
 const COST_GRAPPLE_PULL := 6
 const COST_GRAPPLE_DAMAGE := 6
+const COST_ANIMATRON_RELOAD := 7
+const COST_ANIMATRON_VORTEX := 6
+const COST_ANIMATRON_BLAST := 7
 const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
 var regular_kills: int = 0
-var boss_spawned: bool = false
+## Последний порог убийств, на котором уже был запрошен босс (10, 20, 30…).
+var last_boss_kills_milestone: int = 0
 ## Остановка времени (Shift+Z): враги и снаряды замирают, скорости сохраняются до снятия.
 var world_time_frozen: bool = false
 var up_pyramid_mag: int = 0
@@ -29,15 +33,19 @@ var up_sawed_pellets: int = 0
 var up_grapple_range: int = 0
 var up_grapple_pull: int = 0
 var up_grapple_damage: int = 0
+var up_animatron_reload: int = 0
+var up_animatron_vortex: int = 0
+var up_animatron_blast: int = 0
 
 
 func on_regular_enemy_died(world_pos: Vector3) -> void:
 	regular_kills += 1
 	kills_changed.emit(regular_kills)
 	_spawn_mama_pickup(world_pos)
-	if regular_kills >= KILLS_FOR_BOSS and not boss_spawned:
-		boss_spawned = true
-		boss_spawn_requested.emit()
+	if regular_kills > 0 and regular_kills % KILLS_FOR_BOSS == 0:
+		if regular_kills > last_boss_kills_milestone:
+			last_boss_kills_milestone = regular_kills
+			boss_spawn_requested.emit()
 
 
 func spend_mama(cost: int) -> bool:
@@ -121,6 +129,36 @@ func try_buy_grapple_damage() -> bool:
 	if not spend_mama(COST_GRAPPLE_DAMAGE):
 		return false
 	up_grapple_damage += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_animatron_reload() -> bool:
+	if up_animatron_reload >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_ANIMATRON_RELOAD):
+		return false
+	up_animatron_reload += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_animatron_vortex() -> bool:
+	if up_animatron_vortex >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_ANIMATRON_VORTEX):
+		return false
+	up_animatron_vortex += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_animatron_blast() -> bool:
+	if up_animatron_blast >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_ANIMATRON_BLAST):
+		return false
+	up_animatron_blast += 1
 	upgrades_changed.emit()
 	return true
 
