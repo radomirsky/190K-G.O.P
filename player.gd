@@ -1033,6 +1033,38 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode == KEY_SHIFT and event.location == KEY_LOCATION_LEFT:
 			_try_dash()
 			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_1 or event.physical_keycode == KEY_1)
+			and _world_actions_input_ok()
+		):
+			_equipped = EquippedGun.ANIMATRON
+			_update_weapon_visibility()
+			_update_hp_ui()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_2 or event.physical_keycode == KEY_2)
+			and _world_actions_input_ok()
+		):
+			_equipped = EquippedGun.SAWED_OFF
+			_update_weapon_visibility()
+			_update_hp_ui()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_3 or event.physical_keycode == KEY_3)
+			and _world_actions_input_ok()
+		):
+			_equipped = EquippedGun.PYRAMID
+			_update_weapon_visibility()
+			_update_hp_ui()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_4 or event.physical_keycode == KEY_4)
+			and _world_actions_input_ok()
+		):
+			_equipped = EquippedGun.STASIS
+			_update_weapon_visibility()
+			_update_hp_ui()
+			get_viewport().set_input_as_handled()
 		if (
 			(event.keycode == KEY_C or event.physical_keycode == KEY_C)
 			and _world_actions_input_ok()
