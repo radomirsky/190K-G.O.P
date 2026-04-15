@@ -1813,6 +1813,8 @@ func _glue_joint_pair_exists(scene: Node, a: RigidBody3D, b: RigidBody3D) -> boo
 
 
 func _try_glue_throwable_cubes() -> void:
+	if GameProgress.world_time_frozen:
+		return
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
