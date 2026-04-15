@@ -696,6 +696,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			)
 			get_viewport().set_input_as_handled()
 		elif (
+			(event.keycode == KEY_Q or event.physical_keycode == KEY_Q)
+			and not (event.ctrl_pressed or Input.is_key_pressed(KEY_CTRL))
+			and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and _world_actions_input_ok()
+		):
+			_clear_world_objects()
+			get_viewport().set_input_as_handled()
+		elif (
 			event.keycode == KEY_Q
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and _world_actions_input_ok()
@@ -809,7 +817,12 @@ func _try_dash() -> void:
 
 
 func _clear_world_objects() -> void:
-	# Удаляем динамические объекты: кирпичи/осколки/пирамидки и врагов.
+	# Удаляем динамику на сцене: снаряды, врагов, дроп МАМА, клей между кубами.
+	if GameProgress.world_time_frozen:
+		GameProgress.world_time_frozen = false
+		_world_time_snap.clear()
+	if _held != null and is_instance_valid(_held):
+		_release_held()
 	for node in get_tree().get_nodes_in_group("throwable"):
 		if node is Node:
 			var n := node as Node
@@ -817,6 +830,12 @@ func _clear_world_objects() -> void:
 				continue
 			n.call_deferred("queue_free")
 	for node in get_tree().get_nodes_in_group("enemy"):
+		if node is Node:
+			(node as Node).call_deferred("queue_free")
+	for node in get_tree().get_nodes_in_group("mama_pickup"):
+		if node is Node:
+			(node as Node).call_deferred("queue_free")
+	for node in get_tree().get_nodes_in_group("cube_glue"):
 		if node is Node:
 			(node as Node).call_deferred("queue_free")
 
@@ -1835,6 +1854,7 @@ func _try_glue_throwable_cubes() -> void:
 	b.angular_velocity = Vector3.ZERO
 	var joint := PinJoint3D.new()
 	joint.name = "CubeGlue_%s" % str(Time.get_ticks_msec())
+	joint.add_to_group("cube_glue")
 	scene.add_child(joint)
 	joint.global_position = (a.global_position + b.global_position) * 0.5
 	joint.node_a = scene.get_path_to(a)
