@@ -168,6 +168,15 @@ func _compute_hit_damage_from_player() -> int:
 	return maxi(1, roundi(raw))
 
 
+## Удар с верёвки (игрок притянулся ПКМ+ЛКМ в прыжке).
+func take_grapple_punch(damage: int) -> void:
+	if _dead:
+		return
+	if damage < 1:
+		damage = 1
+	_take_hit(damage)
+
+
 func _take_hit(amount: int = 1) -> void:
 	if _dead:
 		return

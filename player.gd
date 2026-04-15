@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF }
+enum GrappleState { INACTIVE, ROPE_READY, PULLING }
 
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
@@ -83,6 +84,17 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var max_hp: int = 100
 @export var enemy_touch_damage: int = 8
 @export var damage_invuln_sec: float = 1.35
+## Верёвка: в прыжке ПКМ — подготовка, ЛКМ — бросок к врагу по прицелу; колесо натягивает тягу.
+@export var grapple_max_range: float = 36.0
+@export var grapple_break_range: float = 48.0
+@export var grapple_pull_accel: float = 42.0
+@export var grapple_arrive_range: float = 2.35
+@export var grapple_melee_range: float = 3.1
+@export var grapple_melee_damage: int = 3
+@export var grapple_melee_cooldown_sec: float = 0.42
+@export_range(0.5, 3.5, 0.05) var grapple_reel_min: float = 0.65
+@export_range(1.2, 4.0, 0.05) var grapple_reel_max: float = 2.85
+@export var grapple_reel_wheel_step: float = 0.38
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -140,6 +152,11 @@ var _shop_open: bool = false
 ## Магазин открыт из зоны киоска на карте (при выходе из зоны закроется).
 var _shop_from_world_zone: bool = false
 var _shop_layer: CanvasLayer = null
+var _grapple_state: GrappleState = GrappleState.INACTIVE
+var _grapple_target: Node3D = null
+var _grapple_line: MeshInstance3D = null
+var _grapple_melee_cd: float = 0.0
+var _grapple_reel: float = 1.0
 
 
 func _eff_gun_mag() -> int:
@@ -636,10 +653,170 @@ func _world_actions_input_ok() -> bool:
 	)
 
 
+func _ensure_grapple_rope_node() -> void:
+	if _grapple_line != null:
+		return
+	_grapple_line = MeshInstance3D.new()
+	_grapple_line.name = "GrappleRope"
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.038
+	cyl.bottom_radius = 0.038
+	cyl.height = 1.0
+	cyl.radial_segments = 8
+	_grapple_line.mesh = cyl
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.84, 0.71, 0.4)
+	mat.roughness = 0.5
+	_grapple_line.material_override = mat
+	_grapple_line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_grapple_line)
+	_grapple_line.visible = false
+
+
+func _clear_grapple() -> void:
+	_grapple_state = GrappleState.INACTIVE
+	_grapple_target = null
+	_grapple_reel = 1.0
+	if _grapple_line != null:
+		_grapple_line.visible = false
+
+
+func _grapple_hook_world() -> Vector3:
+	if _grapple_target != null and is_instance_valid(_grapple_target):
+		return _grapple_target.global_position + Vector3(0.0, 2.2, 0.0)
+	var ad := _aim_ray_from_dir()
+	return (ad[0] as Vector3) + (ad[1] as Vector3).normalized() * 4.0
+
+
+func _try_grapple_attach() -> void:
+	if _camera == null:
+		return
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var space := get_world_3d().direct_space_state
+	var to := from + dir * grapple_max_range
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.hit_from_inside = true
+	var excl: Array[RID] = [get_rid()]
+	if _held != null and is_instance_valid(_held):
+		excl.append(_held.get_rid())
+	query.exclude = excl
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty() or not hit.has("collider"):
+		return
+	var n: Node = hit["collider"] as Node
+	while n != null:
+		if n.is_in_group("enemy"):
+			_grapple_target = n as Node3D
+			_grapple_state = GrappleState.PULLING
+			_grapple_reel = 1.0
+			_ensure_grapple_rope_node()
+			return
+		n = n.get_parent()
+
+
+func _apply_grapple_pull(delta: float) -> void:
+	if _grapple_target == null or not is_instance_valid(_grapple_target):
+		_clear_grapple()
+		return
+	if _dash_t > 0.0:
+		return
+	var anchor := _grapple_hook_world()
+	var to := anchor - global_position
+	var dist := to.length()
+	if dist > grapple_break_range:
+		_clear_grapple()
+		return
+	if dist > grapple_arrive_range:
+		var dir := to.normalized()
+		var pull := grapple_pull_accel * _grapple_reel * delta
+		velocity.x += dir.x * pull
+		velocity.z += dir.z * pull
+		velocity.y += dir.y * pull * 0.82
+	var h := Vector3(velocity.x, 0.0, velocity.z)
+	var max_h := 38.0
+	if h.length() > max_h:
+		h = h.normalized() * max_h
+		velocity.x = h.x
+		velocity.z = h.z
+	velocity.y = clampf(velocity.y, -36.0, 36.0)
+
+
+func _update_grapple_rope_visual() -> void:
+	if _grapple_line == null:
+		return
+	if _grapple_state == GrappleState.INACTIVE:
+		_grapple_line.visible = false
+		return
+	_ensure_grapple_rope_node()
+	_grapple_line.visible = true
+	var hook := _grapple_hook_world()
+	var p1 := global_position + global_transform.basis * Vector3(0.12, 1.05, 0.1)
+	var to_v := hook - p1
+	var len := maxf(0.08, to_v.length())
+	var dir := to_v / len
+	var mid := p1 + dir * (len * 0.5)
+	var bx := dir.cross(Vector3.UP)
+	if bx.length_squared() < 1e-8:
+		bx = Vector3(1, 0, 0)
+	else:
+		bx = bx.normalized()
+	var bz := bx.cross(dir).normalized()
+	bx = dir.cross(bz).normalized()
+	_grapple_line.global_transform = Transform3D(Basis(bx * 0.07, dir * len, bz * 0.07), mid)
+
+
+func _grapple_in_melee_range() -> bool:
+	if _grapple_target == null or not is_instance_valid(_grapple_target):
+		return false
+	return global_position.distance_to(_grapple_target.global_position) <= grapple_melee_range
+
+
+func _grapple_try_melee() -> void:
+	if _grapple_melee_cd > 0.0:
+		return
+	if not _grapple_in_melee_range():
+		return
+	if _grapple_target.has_method("take_grapple_punch"):
+		_grapple_target.call("take_grapple_punch", grapple_melee_damage)
+		_grapple_melee_cd = grapple_melee_cooldown_sec
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		_jump_requested = true
 	# Поворот камеры из движения мыши — в _input, чтобы срабатывало без ПКМ и до GUI.
+	if event is InputEventMouseButton:
+		if (
+			not _shop_open
+			and not GameProgress.world_time_frozen
+			and _world_actions_input_ok()
+			and _grapple_state == GrappleState.PULLING
+		):
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+				_grapple_reel = minf(_grapple_reel + grapple_reel_wheel_step, grapple_reel_max)
+				get_viewport().set_input_as_handled()
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+				_grapple_reel = maxf(_grapple_reel - grapple_reel_wheel_step, grapple_reel_min)
+				get_viewport().set_input_as_handled()
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		if _shop_open or GameProgress.world_time_frozen:
+			pass
+		elif _world_actions_input_ok() and _equipped != EquippedGun.STASIS:
+			if event.pressed:
+				if _grapple_state == GrappleState.PULLING:
+					_clear_grapple()
+					get_viewport().set_input_as_handled()
+				elif _grapple_state == GrappleState.ROPE_READY:
+					_clear_grapple()
+					get_viewport().set_input_as_handled()
+				elif not is_on_floor() and _grapple_state == GrappleState.INACTIVE:
+					_grapple_state = GrappleState.ROPE_READY
+					_ensure_grapple_rope_node()
+					get_viewport().set_input_as_handled()
 	if event is InputEventMouseMotion:
 		if _shop_open:
 			return
@@ -660,6 +837,15 @@ func _input(event: InputEvent) -> void:
 		if not _world_actions_input_ok():
 			return
 		if event.pressed:
+			if not _shop_open and not GameProgress.world_time_frozen:
+				if _grapple_state == GrappleState.ROPE_READY:
+					_try_grapple_attach()
+					get_viewport().set_input_as_handled()
+					return
+				if _grapple_state == GrappleState.PULLING:
+					_grapple_try_melee()
+					get_viewport().set_input_as_handled()
+					return
 			if _equipped == EquippedGun.PYRAMID and _gun_cd <= 0.0 and _gun_ammo > 0:
 				_cancel_gun_finish_reload_anim()
 				_fire_gun_pyramid()
@@ -1227,8 +1413,15 @@ func _physics_process(delta: float) -> void:
 		velocity.x = target_xz.x
 		velocity.z = target_xz.z
 
+	if _grapple_state == GrappleState.PULLING:
+		_apply_grapple_pull(delta)
+		_grapple_reel = lerpf(_grapple_reel, 1.0, 2.2 * delta)
+	_grapple_melee_cd = maxf(_grapple_melee_cd - delta, 0.0)
+
 	var move_vel := velocity
 	move_and_slide()
+	if is_on_floor() and _grapple_state == GrappleState.ROPE_READY:
+		_clear_grapple()
 	_apply_body_pushes(move_vel)
 
 	var lk := look_key_speed * delta
@@ -1259,6 +1452,7 @@ func _physics_process(delta: float) -> void:
 
 	_update_enlarge_hint_target()
 	_update_aim_feedback()
+	_update_grapple_rope_visual()
 	if _enlarge_hint_rb != _prev_enlarge_hint_rb:
 		_prev_enlarge_hint_rb = _enlarge_hint_rb
 		_refresh_all_throwable_visuals()
