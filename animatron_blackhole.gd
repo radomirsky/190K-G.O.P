@@ -4,8 +4,10 @@ extends Node3D
 @export var suck_radius: float = 24.0
 @export var suck_accel: float = 26.0
 @export var suck_up: float = 0.55
+@export var fly_speed: float = 24.0
 
 var _t: float = 0.0
+var _vel: Vector3 = Vector3.ZERO
 
 @onready var _area: Area3D = $Area3D
 @onready var _col: CollisionShape3D = $Area3D/CollisionShape3D
@@ -14,6 +16,10 @@ var _t: float = 0.0
 func _ready() -> void:
 	if _col and _col.shape is SphereShape3D:
 		(_col.shape as SphereShape3D).radius = suck_radius
+
+
+func set_initial_velocity(v: Vector3) -> void:
+	_vel = v
 
 
 func _process(delta: float) -> void:
@@ -25,6 +31,9 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if _area == null:
 		return
+	# Полёт чёрной дыры.
+	if _vel != Vector3.ZERO:
+		global_position += _vel * delta
 	var center := global_position
 	for body in _area.get_overlapping_bodies():
 		if body == null:

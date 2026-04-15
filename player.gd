@@ -74,6 +74,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 ## Аниматрон: чёрный шар-воронка, засасывающая всех врагов.
 @export var animatron_reload_sec: float = 25.0
 @export var animatron_blackhole_lifetime_sec: float = 4.8
+@export var animatron_blackhole_fly_speed: float = 26.0
 @export var animatron_suck_radius: float = 24.0
 @export var animatron_suck_accel: float = 26.0
 @export var animatron_suck_up: float = 0.55
@@ -399,6 +400,18 @@ func _process(_delta: float) -> void:
 			else:
 				_sawed_node.rotation = Vector3.ZERO
 				_sawed_node.position = _SAWED_GUN_LOCAL_POS
+	elif _equipped == EquippedGun.ANIMATRON:
+		_ensure_animatron_nodes()
+		if _animatron_node:
+			var ta := float(Time.get_ticks_msec()) / 1000.0
+			var k := 0.0
+			if _animatron_cd > 0.0:
+				k = clampf(_animatron_cd / maxf(animatron_reload_sec, 0.01), 0.0, 1.0)
+			_animatron_node.rotation = Vector3(0.0, 0.0, sin(ta * 8.0) * 0.28 * k)
+			_animatron_node.position = _ANIMATRON_MODEL_LOCAL_POS + Vector3(0.0, sin(ta * 13.0) * 0.02 * k, 0.0)
+			var ring := _animatron_node.get_node_or_null("Ring") as MeshInstance3D
+			if ring:
+				ring.rotation = Vector3(PI / 2.0, ta * 3.2, sin(ta * 6.0) * 0.2 * k)
 
 
 func _setup_hp_ui() -> void:
@@ -1425,17 +1438,36 @@ func _ensure_animatron_nodes() -> void:
 	_camera.add_child(_animatron_node)
 	_animatron_node.transform.origin = _ANIMATRON_MODEL_LOCAL_POS
 	var core := MeshInstance3D.new()
+	core.name = "Core"
 	var sm := SphereMesh.new()
-	sm.radius = 0.08
-	sm.height = 0.16
+	sm.radius = 0.09
+	sm.height = 0.18
 	core.mesh = sm
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.05, 0.05, 0.07, 1.0)
+	mat.albedo_color = Color(0.02, 0.02, 0.03, 1.0)
 	mat.emission_enabled = true
-	mat.emission = Color(0.12, 0.12, 0.18, 1.0)
-	mat.emission_energy_multiplier = 1.2
+	mat.emission = Color(0.2, 0.0, 0.55, 1.0)
+	mat.emission_energy_multiplier = 1.65
+	mat.roughness = 0.25
 	core.set_surface_override_material(0, mat)
 	_animatron_node.add_child(core)
+	var ring := MeshInstance3D.new()
+	ring.name = "Ring"
+	var tm := TorusMesh.new()
+	tm.ring_radius = 0.12
+	tm.pipe_radius = 0.02
+	tm.ring_sides = 14
+	tm.pipe_sides = 10
+	ring.mesh = tm
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = Color(0.13, 0.13, 0.14, 1.0)
+	rmat.emission_enabled = true
+	rmat.emission = Color(0.45, 0.1, 0.85, 1.0)
+	rmat.emission_energy_multiplier = 0.9
+	rmat.roughness = 0.5
+	ring.set_surface_override_material(0, rmat)
+	ring.rotation = Vector3(PI / 2.0, 0.0, 0.0)
+	_animatron_node.add_child(ring)
 	_animatron_node.visible = false
 
 
@@ -1539,13 +1571,16 @@ func _fire_animatron_blackhole() -> void:
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	# Ставим чёрную воронку чуть впереди прицела.
-	bh.global_position = from + dir * 8.0
+	# Стартуем рядом с камерой и летим по лучу.
+	bh.global_position = from + dir * 1.25
 	if bh.has_method("set"):
 		bh.set("lifetime_sec", animatron_blackhole_lifetime_sec)
 		bh.set("suck_radius", animatron_suck_radius)
 		bh.set("suck_accel", animatron_suck_accel)
 		bh.set("suck_up", animatron_suck_up)
+		bh.set("fly_speed", animatron_blackhole_fly_speed)
+	if bh.has_method("set_initial_velocity"):
+		bh.call("set_initial_velocity", dir * animatron_blackhole_fly_speed)
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
