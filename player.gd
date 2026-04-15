@@ -362,6 +362,11 @@ func _setup_hp_ui() -> void:
 	_gun_label.position = Vector2(16, 38)
 	_gun_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
 	_hp_layer.add_child(_gun_label)
+	_mama_hud = Label.new()
+	_mama_hud.text = ""
+	_mama_hud.position = Vector2(16, 60)
+	_mama_hud.add_theme_color_override("font_color", Color(0.95, 0.85, 0.95, 0.95))
+	_hp_layer.add_child(_mama_hud)
 	_update_hp_ui()
 
 
@@ -477,6 +482,8 @@ func _input(event: InputEvent) -> void:
 		_jump_requested = true
 	# Поворот камеры из движения мыши — в _input, чтобы срабатывало без ПКМ и до GUI.
 	if event is InputEventMouseMotion:
+		if _shop_open:
+			return
 		var mm := Input.mouse_mode
 		if (
 			mm == Input.MOUSE_MODE_CAPTURED
@@ -489,6 +496,8 @@ func _input(event: InputEvent) -> void:
 			)
 	# ЛКМ: стрельба из пушки (G) или стазиса (F), иначе — метание удерживаемого (как раньше).
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if _shop_open:
+			return
 		if not _world_actions_input_ok():
 			return
 		if event.pressed:
@@ -497,8 +506,8 @@ func _input(event: InputEvent) -> void:
 				_fire_gun_pyramid()
 				_gun_cd = gun_fire_cooldown_sec
 				_gun_ammo -= 1
-				if _gun_ammo < gun_mag_size:
-					_gun_refill_wait = gun_full_refill_delay_sec
+				if _gun_ammo < _eff_gun_mag():
+					_gun_refill_wait = _eff_gun_refill_delay()
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
@@ -885,7 +894,7 @@ func _fire_sawed_off() -> void:
 	var base_pos := _sawed_muzzle.global_position
 	_sawed_volley_seq += 1
 	var volley_id := _sawed_volley_seq
-	for _i in range(sawed_pellet_count):
+	for _i in range(_eff_sawed_pellets()):
 		var cube := THROWABLE_CUBE_SCENE.instantiate() as RigidBody3D
 		cube.set_meta("_player_spawned", true)
 		cube.set_meta("_cube_scale_mul", sawed_pellet_scale)
