@@ -7,6 +7,7 @@ signal boss_spawn_requested
 signal upgrades_changed
 
 const KILLS_FOR_BOSS := 10
+const BOSS_MAMA_PICKUP_COUNT := 5
 const COST_PYRAMID_MAG := 4
 const COST_PYRAMID_RELOAD := 5
 const COST_STASIS_DMG := 6
@@ -89,6 +90,10 @@ func try_buy_sawed_pellets() -> bool:
 
 
 func _spawn_mama_pickup(world_pos: Vector3) -> void:
+	spawn_mama_pickup_at(world_pos + Vector3(0.0, 0.55, 0.0))
+
+
+func spawn_mama_pickup_at(global_pos: Vector3) -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
@@ -97,4 +102,11 @@ func _spawn_mama_pickup(world_pos: Vector3) -> void:
 		return
 	var p := psc.instantiate() as Node3D
 	scene.add_child(p)
-	p.global_position = world_pos + Vector3(0.0, 0.55, 0.0)
+	p.global_position = global_pos
+
+
+func spawn_boss_mama_drops(world_pos: Vector3) -> void:
+	for i in BOSS_MAMA_PICKUP_COUNT:
+		var ang := TAU * float(i) / float(BOSS_MAMA_PICKUP_COUNT)
+		var r := 1.1 + randf() * 0.55
+		spawn_mama_pickup_at(world_pos + Vector3(cos(ang) * r, 0.55, sin(ang) * r))

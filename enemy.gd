@@ -225,7 +225,9 @@ func _die_scatter() -> void:
 	if _dead:
 		return
 	_dead = true
-	if not is_boss:
+	if is_boss:
+		GameProgress.spawn_boss_mama_drops(global_position)
+	else:
 		GameProgress.on_regular_enemy_died(global_position)
 	var scene := get_tree().current_scene
 	if scene == null:

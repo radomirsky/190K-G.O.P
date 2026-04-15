@@ -137,6 +137,8 @@ var _hp_label: Label = null
 var _gun_label: Label = null
 var _mama_hud: Label = null
 var _shop_open: bool = false
+## Магазин открыт из зоны киоска на карте (при выходе из зоны закроется).
+var _shop_from_world_zone: bool = false
 var _shop_layer: CanvasLayer = null
 
 
@@ -460,7 +462,7 @@ func _setup_shop_ui() -> void:
 	margin.add_child(vbox)
 	var title := Label.new()
 	title.name = "ShopTitle"
-	title.text = "МАГАЗИН (M — открыть/закрыть, Esc — закрыть)"
+	title.text = "МАГАЗИН — валюта: жетоны МАМА (M / киоск на краю, Esc — закрыть)"
 	vbox.add_child(title)
 	var info := Label.new()
 	info.name = "ShopInfo"
@@ -480,11 +482,15 @@ func _refresh_shop_buttons() -> void:
 		return
 	var info := _shop_layer.find_child("ShopInfo", true, false) as Label
 	if info:
-		info.text = "После убийства врага выпадает «МАМА». Жетонов: %d. Убийств до босса: %d / %d." % [
-			GameProgress.mama_tokens,
-			GameProgress.regular_kills,
-			GameProgress.KILLS_FOR_BOSS,
-		]
+		info.text = (
+			"Жетоны «МАМА» — валюта: подбери дроп или с босса (×%d). Сейчас: %d. Убийств до босса: %d / %d. Киоск на краю арены открывает этот магазин при входе."
+			% [
+				GameProgress.BOSS_MAMA_PICKUP_COUNT,
+				GameProgress.mama_tokens,
+				GameProgress.regular_kills,
+				GameProgress.KILLS_FOR_BOSS,
+			]
+		)
 	_set_shop_btn(
 		"Btn_pyramid_mag",
 		"Пирамида: +2 патрона в магазин",
