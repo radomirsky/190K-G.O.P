@@ -544,6 +544,19 @@ func _on_shop_buy_pressed(which: String) -> void:
 	_update_hp_ui()
 
 
+func notify_world_shop_zone(inside: bool) -> void:
+	if inside:
+		if not _shop_open:
+			_shop_from_world_zone = true
+			_toggle_shop()
+	else:
+		if _shop_open and _shop_from_world_zone:
+			_shop_from_world_zone = false
+			_toggle_shop()
+		else:
+			_shop_from_world_zone = false
+
+
 func _toggle_shop() -> void:
 	_shop_open = not _shop_open
 	if _shop_layer:
