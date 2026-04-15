@@ -11,6 +11,8 @@ extends CharacterBody3D
 @export var death_shard_impulse: float = 8.0
 @export var death_shard_up: float = 3.5
 @export var max_hp: int = 5
+## Босс: 10 «полосок» HP (по 1 за попадание), сильный урон в ближнем бою.
+@export var is_boss: bool = false
 @export var damage_invuln_sec: float = 0.08
 @export var hit_flash_sec: float = 1.4
 @export var hit_flash_color: Color = Color(0.18, 0.95, 0.22, 1.0)
@@ -62,6 +64,20 @@ func _ready() -> void:
 				_base_color = dup.albedo_color
 	_hp = max_hp
 	_initial_max_hp = max_hp
+	if is_boss:
+		add_to_group("boss")
+		damage_invuln_sec = 0.0
+		var hum_b := get_node_or_null("Humanoid") as Node3D
+		if hum_b:
+			hum_b.scale *= 1.35
+		# Тёмнее «босс».
+		if hum_b:
+			for c in hum_b.get_children():
+				if c is MeshInstance3D:
+					var mi2 := c as MeshInstance3D
+					var m2 := mi2.get_surface_override_material(0) as StandardMaterial3D
+					if m2:
+						m2.albedo_color = m2.albedo_color.darkened(0.35)
 
 
 func _physics_process(delta: float) -> void:
@@ -144,6 +160,8 @@ func _take_hit(amount: int = 1) -> void:
 		return
 	if amount < 1:
 		amount = 1
+	if is_boss:
+		amount = 1
 	_invuln = damage_invuln_sec
 	_flash = hit_flash_sec
 	_set_humanoid_color(hit_flash_color)
@@ -153,6 +171,8 @@ func _take_hit(amount: int = 1) -> void:
 
 
 func _sawed_volley_damage_amount() -> int:
+	if is_boss:
+		return 1
 	return maxi(1, (_initial_max_hp + sawed_volleys_to_kill - 1) / sawed_volleys_to_kill)
 
 
@@ -161,6 +181,8 @@ func _take_sawed_volley_hit(amount: int) -> void:
 	if _dead:
 		return
 	if amount < 1:
+		amount = 1
+	if is_boss:
 		amount = 1
 	_flash = hit_flash_sec
 	_set_humanoid_color(hit_flash_color)
@@ -175,6 +197,8 @@ func _take_stasis_hit(amount: int) -> void:
 		return
 	if amount < 1:
 		amount = 1
+	if is_boss:
+		amount = 1
 	_flash = hit_flash_sec
 	_set_humanoid_color(hit_flash_color)
 	_hp -= amount
@@ -186,6 +210,8 @@ func _die_scatter() -> void:
 	if _dead:
 		return
 	_dead = true
+	if not is_boss:
+		GameProgress.on_regular_enemy_died(global_position)
 	var scene := get_tree().current_scene
 	if scene == null:
 		queue_free()
@@ -278,7 +304,8 @@ func _on_break_area_body_entered(body: Node) -> void:
 				away = away.normalized()
 				rb.apply_central_impulse(away * 1.25)
 		if is_stasis_proj:
-			_take_stasis_hit(maxi(1, stasis_hit_damage))
+			var st_dmg := maxi(1, stasis_hit_damage + GameProgress.up_stasis_dmg)
+			_take_stasis_hit(st_dmg)
 		elif is_sawed_cube:
 			var svid := int(rb.get_meta("_sawed_volley_id"))
 			if svid != _last_sawed_volley_id:

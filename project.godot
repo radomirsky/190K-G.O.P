@@ -23,6 +23,7 @@ run/pause_on_focus_loss=false
 [autoload]
 
 ThrowablesBudget="*res://throwable_budget.gd"
+GameProgress="*res://game_progress.gd"
 
 [display]
 
