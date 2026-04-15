@@ -74,7 +74,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 ## Аниматрон: чёрный шар-воронка, засасывающая всех врагов.
 @export var animatron_reload_sec: float = 25.0
 @export var animatron_blackhole_lifetime_sec: float = 5.0
-@export var animatron_blackhole_fly_speed: float = 26.0
+@export var animatron_blackhole_fly_speed: float = 9.0
 @export var animatron_suck_radius: float = 24.0
 @export var animatron_suck_accel: float = 26.0
 @export var animatron_suck_up: float = 0.55
