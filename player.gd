@@ -278,8 +278,8 @@ func _process(_delta: float) -> void:
 		if _gun_node:
 			var t := float(Time.get_ticks_msec()) / 1000.0
 			var k_wait := 0.0
-			if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
-				k_wait = clampf(_gun_refill_wait / maxf(gun_full_refill_delay_sec, 0.01), 0.0, 1.0)
+			if _gun_ammo < _eff_gun_mag() and _gun_refill_wait > 0.0:
+				k_wait = clampf(_gun_refill_wait / maxf(_eff_gun_refill_delay(), 0.01), 0.0, 1.0)
 			var k_fin := 0.0
 			if _gun_reload > 0.0:
 				k_fin = clampf(_gun_reload / maxf(gun_refill_finish_anim_sec, 0.01), 0.0, 1.0)
@@ -370,12 +370,13 @@ func _update_hp_ui() -> void:
 		_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
 	if _gun_label:
 		if _equipped == EquippedGun.PYRAMID:
-			if _gun_ammo < gun_mag_size and _gun_refill_wait > 0.0:
-				_gun_label.text = "GUN: %d/%d  полн. %.1fs" % [_gun_ammo, gun_mag_size, _gun_refill_wait]
+			var gm := _eff_gun_mag()
+			if _gun_ammo < gm and _gun_refill_wait > 0.0:
+				_gun_label.text = "GUN: %d/%d  полн. %.1fs" % [_gun_ammo, gm, _gun_refill_wait]
 			elif _gun_reload > 0.0:
-				_gun_label.text = "GUN: %d/%d  дозарядка…" % [_gun_ammo, gun_mag_size]
+				_gun_label.text = "GUN: %d/%d  дозарядка…" % [_gun_ammo, gm]
 			else:
-				_gun_label.text = "GUN: %d/%d" % [_gun_ammo, gun_mag_size]
+				_gun_label.text = "GUN: %d/%d" % [_gun_ammo, gm]
 		elif _equipped == EquippedGun.STASIS:
 			if _stasis_ammo < stasis_mag_size and _stasis_refill_wait > 0.0:
 				_gun_label.text = (
@@ -391,14 +392,19 @@ func _update_hp_ui() -> void:
 					_sawed_ammo,
 					sawed_mag_size,
 					_sawed_refill_wait,
-					sawed_pellet_count,
+					_eff_sawed_pellets(),
 				]
 			elif _sawed_reload > 0.0:
 				_gun_label.text = "ОБРЕЗ: %d/%d  дозарядка…" % [_sawed_ammo, sawed_mag_size]
 			else:
-				_gun_label.text = "ОБРЕЗ: %d/%d  (залп %d кубов)" % [_sawed_ammo, sawed_mag_size, sawed_pellet_count]
+				_gun_label.text = "ОБРЕЗ: %d/%d  (залп %d кубов)" % [_sawed_ammo, sawed_mag_size, _eff_sawed_pellets()]
 		else:
 			_gun_label.text = ""
+	if _mama_hud:
+		_mama_hud.text = "МАМА: %d   Убийств: %d (босс на 10)" % [
+			GameProgress.mama_tokens,
+			GameProgress.regular_kills,
+		]
 
 
 func take_damage(amount: int) -> void:
