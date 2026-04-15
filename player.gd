@@ -1476,11 +1476,12 @@ func _ensure_animatron_nodes() -> void:
 	sm.height = 0.18
 	core.mesh = sm
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.02, 0.02, 0.03, 1.0)
+	# Стиль "рельсотрона": тёмный металл + холодное голубое свечение.
+	mat.albedo_color = Color(0.18, 0.18, 0.2, 1.0)
 	mat.emission_enabled = true
-	mat.emission = Color(0.2, 0.0, 0.55, 1.0)
-	mat.emission_energy_multiplier = 1.65
-	mat.roughness = 0.25
+	mat.emission = Color(0.15, 0.35, 0.9, 1.0)
+	mat.emission_energy_multiplier = 0.95
+	mat.roughness = 0.35
 	core.set_surface_override_material(0, mat)
 	_animatron_node.add_child(core)
 	var ring := MeshInstance3D.new()
@@ -1493,11 +1494,11 @@ func _ensure_animatron_nodes() -> void:
 	ring.mesh = tm
 
 	var rmat := StandardMaterial3D.new()
-	rmat.albedo_color = Color(0.13, 0.13, 0.14, 1.0)
+	rmat.albedo_color = Color(0.22, 0.26, 0.34, 1.0)
 	rmat.emission_enabled = true
-	rmat.emission = Color(0.45, 0.1, 0.85, 1.0)
-	rmat.emission_energy_multiplier = 0.9
-	rmat.roughness = 0.5
+	rmat.emission = Color(0.15, 0.45, 1.0, 1.0)
+	rmat.emission_energy_multiplier = 0.7
+	rmat.roughness = 0.55
 	ring.set_surface_override_material(0, rmat)
 	ring.rotation = Vector3(PI / 2.0, 0.0, 0.0)
 	_animatron_node.add_child(ring)
@@ -1603,7 +1604,7 @@ func _fire_animatron_blackhole() -> void:
 	scene.add_child(bh)
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
-	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var dir: Vector3 = _animatron_aim_dir()
 	# Стартуем рядом с камерой и летим по лучу.
 	bh.global_position = from + dir * 1.25
 	if bh.has_method("set"):
@@ -1614,6 +1615,34 @@ func _fire_animatron_blackhole() -> void:
 		bh.set("fly_speed", animatron_blackhole_fly_speed)
 	if bh.has_method("set_initial_velocity"):
 		bh.call("set_initial_velocity", dir * animatron_blackhole_fly_speed)
+
+
+func _animatron_aim_dir() -> Vector3:
+	# Автонаведение: если враг близко к прицелу, летим в него; иначе — по прямому лучу.
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var fwd: Vector3 = (ad[1] as Vector3).normalized()
+	var best: Node3D = null
+	var best_score := -INF
+	var max_d2 := _eff_grapple_max_range() * _eff_grapple_max_range()
+	for node in get_tree().get_nodes_in_group("enemy"):
+		if not node is Node3D:
+			continue
+		var e := node as Node3D
+		var to := (e.global_position + Vector3(0.0, 2.0, 0.0)) - from
+		var d2 := to.length_squared()
+		if d2 <= 0.0001 or d2 > max_d2:
+			continue
+		var dir := to.normalized()
+		var dot := fwd.dot(dir)
+		# Чем ближе к центру прицела и чем ближе по дистанции — тем лучше.
+		var score := dot * 2.0 - sqrt(d2) * 0.01
+		if dot > 0.93 and score > best_score:
+			best_score = score
+			best = e
+	if best != null:
+		return ((best.global_position + Vector3(0.0, 2.0, 0.0)) - from).normalized()
+	return fwd
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
