@@ -50,6 +50,8 @@ func _on_boss_spawn_requested() -> void:
 func _process(delta: float) -> void:
 	if not is_inside_tree():
 		return
+	if GameProgress.world_time_frozen:
+		return
 	if _player == null or not is_instance_valid(_player):
 		_player = get_node_or_null(player_path) as Node3D
 		if _player == null:

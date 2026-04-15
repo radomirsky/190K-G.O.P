@@ -121,6 +121,8 @@ var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
 var _cubes_world_locked: bool = false
+## Снимок скоростей при остановке времени (Shift+Z): CharacterBody3D и RigidBody3D из сцен.
+var _world_time_snap: Dictionary = {}
 var _want_mouse_captured: bool = true
 var _crosshair_layer: CanvasLayer = null
 var _hit_marker: MeshInstance3D = null
@@ -712,14 +714,24 @@ func _unhandled_input(event: InputEvent) -> void:
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and _world_actions_input_ok()
 		):
-			_toggle_cubes_world_lock()
+			_toggle_world_time_freeze()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_X
 			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
 			and _world_actions_input_ok()
 		):
-			_unlock_cubes_world()
+			if GameProgress.world_time_frozen:
+				_resume_world_time()
+			else:
+				_unlock_cubes_world()
+			get_viewport().set_input_as_handled()
+		elif (
+			event.keycode == KEY_Y
+			and (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and _world_actions_input_ok()
+		):
+			_toggle_cubes_world_lock()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_B
@@ -1049,6 +1061,7 @@ func _fire_sawed_off() -> void:
 			cube.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		_update_throwable_visual(cube)
 		ThrowablesBudget.track_throwable(cube)
+		_snap_throwable_if_world_time_frozen(cube)
 
 
 func _fire_stasis_ring() -> void:
@@ -1624,6 +1637,79 @@ func _apply_throwables_world_lock() -> void:
 			rb.linear_velocity = Vector3.ZERO
 			rb.angular_velocity = Vector3.ZERO
 	_refresh_all_throwable_visuals()
+
+
+func _toggle_world_time_freeze() -> void:
+	if GameProgress.world_time_frozen:
+		_resume_world_time()
+	else:
+		_freeze_world_time()
+
+
+func _freeze_world_time() -> void:
+	if GameProgress.world_time_frozen:
+		return
+	GameProgress.world_time_frozen = true
+	_world_time_snap.clear()
+	for node in get_tree().get_nodes_in_group("enemy"):
+		if not node is CharacterBody3D:
+			continue
+		var e := node as CharacterBody3D
+		if not e.is_inside_tree():
+			continue
+		_world_time_snap[e] = {"vel": e.velocity}
+		e.velocity = Vector3.ZERO
+		e.set_physics_process(false)
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if not node is RigidBody3D:
+			continue
+		var rb := node as RigidBody3D
+		if rb == _held or rb.is_in_group("held_throwable"):
+			continue
+		if not rb.is_inside_tree():
+			continue
+		_world_time_snap[rb] = {
+			"lv": rb.linear_velocity,
+			"av": rb.angular_velocity,
+		}
+		rb.freeze = true
+		rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	_refresh_all_throwable_visuals()
+
+
+func _resume_world_time() -> void:
+	if not GameProgress.world_time_frozen:
+		return
+	GameProgress.world_time_frozen = false
+	for node in _world_time_snap.keys():
+		if not is_instance_valid(node):
+			continue
+		if node is CharacterBody3D and (node as Node).is_in_group("enemy"):
+			var e := node as CharacterBody3D
+			e.set_physics_process(true)
+			var st_e: Dictionary = _world_time_snap[node]
+			e.velocity = st_e.get("vel", Vector3.ZERO) as Vector3
+		elif node is RigidBody3D:
+			var rb := node as RigidBody3D
+			var st: Dictionary = _world_time_snap[node]
+			rb.freeze = false
+			rb.linear_velocity = st.get("lv", Vector3.ZERO) as Vector3
+			rb.angular_velocity = st.get("av", Vector3.ZERO) as Vector3
+	_world_time_snap.clear()
+	_apply_throwables_world_lock()
+	_refresh_all_throwable_visuals()
+
+
+func _snap_throwable_if_world_time_frozen(rb: RigidBody3D) -> void:
+	if rb == null or not is_instance_valid(rb):
+		return
+	if not GameProgress.world_time_frozen:
+		return
+	if rb == _held or rb.is_in_group("held_throwable"):
+		return
+	_world_time_snap[rb] = {"lv": rb.linear_velocity, "av": rb.angular_velocity}
+	rb.freeze = true
+	rb.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 
 
 func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:

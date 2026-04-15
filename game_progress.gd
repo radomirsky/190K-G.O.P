@@ -16,6 +16,8 @@ const MAX_UPGRADE_TIER := 4
 var mama_tokens: int = 0
 var regular_kills: int = 0
 var boss_spawned: bool = false
+## Остановка времени (Shift+Z): враги и снаряды замирают, скорости сохраняются до снятия.
+var world_time_frozen: bool = false
 var up_pyramid_mag: int = 0
 var up_pyramid_reload: int = 0
 var up_stasis_dmg: int = 0

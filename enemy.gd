@@ -70,14 +70,29 @@ func _ready() -> void:
 		var hum_b := get_node_or_null("Humanoid") as Node3D
 		if hum_b:
 			hum_b.scale *= 1.35
-		# Тёмнее «босс».
-		if hum_b:
-			for c in hum_b.get_children():
-				if c is MeshInstance3D:
-					var mi2 := c as MeshInstance3D
-					var m2 := mi2.get_surface_override_material(0) as StandardMaterial3D
-					if m2:
-						m2.albedo_color = m2.albedo_color.darkened(0.35)
+			_apply_boss_sphere_visual(hum_b)
+
+
+func _apply_boss_sphere_visual(hum: Node3D) -> void:
+	var sm := SphereMesh.new()
+	sm.radius = 0.42
+	sm.height = 0.84
+	var got_base := false
+	for c in hum.get_children():
+		if not c is MeshInstance3D:
+			continue
+		var mi := c as MeshInstance3D
+		mi.mesh = sm
+		var m := mi.get_surface_override_material(0) as StandardMaterial3D
+		if m == null:
+			continue
+		m.albedo_color = Color(0.2, 0.04, 0.12)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.5, 0.08)
+		m.emission_energy_multiplier = 2.4
+		if not got_base:
+			_base_color = m.albedo_color
+			got_base = true
 
 
 func _physics_process(delta: float) -> void:
@@ -239,19 +254,29 @@ func _die_scatter() -> void:
 		rb.mass = 0.12
 		rb.continuous_cd = true
 		var mesh_i := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		var sz := 0.85
-		if mi.mesh is BoxMesh:
-			sz = (mi.mesh as BoxMesh).size.x
-		bm.size = Vector3(sz, sz, sz)
-		mesh_i.mesh = bm
+		var col := CollisionShape3D.new()
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = mat_col
 		mesh_i.set_surface_override_material(0, mat)
-		var col := CollisionShape3D.new()
-		var bs := BoxShape3D.new()
-		bs.size = Vector3(sz, sz, sz)
-		col.shape = bs
+		if mi.mesh is SphereMesh:
+			var src_s := mi.mesh as SphereMesh
+			var sm := SphereMesh.new()
+			sm.radius = src_s.radius
+			sm.height = src_s.height
+			mesh_i.mesh = sm
+			var sph := SphereShape3D.new()
+			sph.radius = maxf(0.05, src_s.radius * 0.95)
+			col.shape = sph
+		else:
+			var bm := BoxMesh.new()
+			var sz := 0.85
+			if mi.mesh is BoxMesh:
+				sz = (mi.mesh as BoxMesh).size.x
+			bm.size = Vector3(sz, sz, sz)
+			mesh_i.mesh = bm
+			var bs := BoxShape3D.new()
+			bs.size = Vector3(sz, sz, sz)
+			col.shape = bs
 		rb.add_child(mesh_i)
 		rb.add_child(col)
 		rb.add_to_group("throwable")
