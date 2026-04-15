@@ -1,6 +1,6 @@
 extends Node3D
 
-@export var lifetime_sec: float = 4.8
+@export var lifetime_sec: float = 5.0
 @export var suck_radius: float = 24.0
 @export var suck_accel: float = 26.0
 @export var suck_up: float = 0.55
