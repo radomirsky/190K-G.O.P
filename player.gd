@@ -861,6 +861,19 @@ func _grapple_try_melee() -> void:
 		_grapple_melee_cd = grapple_melee_cooldown_sec
 
 
+func _cycle_weapon(step: int) -> void:
+	var guns := [EquippedGun.PYRAMID, EquippedGun.STASIS, EquippedGun.SAWED_OFF]
+	var idx := guns.find(_equipped)
+	if idx < 0:
+		idx = 0
+	idx = (idx + step) % guns.size()
+	if idx < 0:
+		idx += guns.size()
+	_equipped = guns[idx]
+	_update_weapon_visibility()
+	_update_hp_ui()
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		if _grapple_state != GrappleState.INACTIVE:
@@ -880,6 +893,18 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 				_grapple_reel = maxf(_grapple_reel - grapple_reel_wheel_step, grapple_reel_min)
+				get_viewport().set_input_as_handled()
+		elif (
+			not _shop_open
+			and _world_actions_input_ok()
+			and _grapple_state != GrappleState.PULLING
+			and event.pressed
+		):
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_cycle_weapon(1)
+				get_viewport().set_input_as_handled()
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_cycle_weapon(-1)
 				get_viewport().set_input_as_handled()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if _shop_open or GameProgress.world_time_frozen:
