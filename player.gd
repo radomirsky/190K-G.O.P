@@ -84,7 +84,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var max_hp: int = 100
 @export var enemy_touch_damage: int = 8
 @export var damage_invuln_sec: float = 1.35
-## Верёвка: в прыжке ПКМ — подготовка, ЛКМ — бросок к врагу по прицелу; колесо натягивает тягу.
+## Верёвка: ПКМ — подготовка, ЛКМ — бросок по прицелу во что угодно; колесо натягивает тягу.
 @export var grapple_max_range: float = 36.0
 @export var grapple_break_range: float = 48.0
 @export var grapple_pull_accel: float = 42.0
@@ -92,6 +92,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var grapple_melee_range: float = 3.1
 @export var grapple_melee_damage: int = 3
 @export var grapple_melee_cooldown_sec: float = 0.42
+@export var grapple_attach_damage: int = 1
 @export_range(0.5, 3.5, 0.05) var grapple_reel_min: float = 0.65
 @export_range(1.2, 4.0, 0.05) var grapple_reel_max: float = 2.85
 @export var grapple_reel_wheel_step: float = 0.38
@@ -154,6 +155,10 @@ var _shop_from_world_zone: bool = false
 var _shop_layer: CanvasLayer = null
 var _grapple_state: GrappleState = GrappleState.INACTIVE
 var _grapple_target: Node3D = null
+var _grapple_enemy: Node3D = null
+var _grapple_anchor_node: Node3D = null
+var _grapple_anchor_local: Vector3 = Vector3.ZERO
+var _grapple_anchor_world: Vector3 = Vector3.ZERO
 var _grapple_line: MeshInstance3D = null
 var _grapple_melee_cd: float = 0.0
 var _grapple_reel: float = 1.0
@@ -676,14 +681,22 @@ func _ensure_grapple_rope_node() -> void:
 func _clear_grapple() -> void:
 	_grapple_state = GrappleState.INACTIVE
 	_grapple_target = null
+	_grapple_enemy = null
+	_grapple_anchor_node = null
+	_grapple_anchor_local = Vector3.ZERO
+	_grapple_anchor_world = Vector3.ZERO
 	_grapple_reel = 1.0
 	if _grapple_line != null:
 		_grapple_line.visible = false
 
 
 func _grapple_hook_world() -> Vector3:
+	if _grapple_anchor_node != null and is_instance_valid(_grapple_anchor_node):
+		return _grapple_anchor_node.to_global(_grapple_anchor_local)
 	if _grapple_target != null and is_instance_valid(_grapple_target):
-		return _grapple_target.global_position + Vector3(0.0, 2.2, 0.0)
+		return _grapple_target.global_position
+	if _grapple_anchor_world != Vector3.ZERO:
+		return _grapple_anchor_world
 	var ad := _aim_ray_from_dir()
 	return (ad[0] as Vector3) + (ad[1] as Vector3).normalized() * 4.0
 
@@ -707,15 +720,37 @@ func _try_grapple_attach() -> void:
 	var hit: Dictionary = space.intersect_ray(query)
 	if hit.is_empty() or not hit.has("collider"):
 		return
-	var n: Node = hit["collider"] as Node
-	while n != null:
-		if n.is_in_group("enemy"):
+	var hp := Vector3.ZERO
+	if hit.has("position"):
+		hp = hit["position"] as Vector3
+	var col: Object = hit["collider"]
+
+	_grapple_target = null
+	_grapple_enemy = null
+	_grapple_anchor_node = null
+	_grapple_anchor_world = hp
+
+	if col is Node:
+		var n: Node = col as Node
+		if n is Node3D:
 			_grapple_target = n as Node3D
-			_grapple_state = GrappleState.PULLING
-			_grapple_reel = 1.0
-			_ensure_grapple_rope_node()
-			return
-		n = n.get_parent()
+			_grapple_anchor_node = _grapple_target
+			_grapple_anchor_local = _grapple_target.to_local(hp)
+		# Если попали во врага или его часть — ищем родителя из группы enemy.
+		while n != null:
+			if n.is_in_group("enemy"):
+				_grapple_enemy = n as Node3D
+				break
+			n = n.get_parent()
+
+	_grapple_state = GrappleState.PULLING
+	_grapple_reel = 1.0
+	_ensure_grapple_rope_node()
+	if _grapple_enemy != null and is_instance_valid(_grapple_enemy) and grapple_attach_damage > 0:
+		if _grapple_enemy.has_method("take_grapple_hit"):
+			_grapple_enemy.call("take_grapple_hit", grapple_attach_damage)
+		elif _grapple_enemy.has_method("take_grapple_punch"):
+			_grapple_enemy.call("take_grapple_punch", grapple_attach_damage)
 
 
 func _apply_grapple_pull(delta: float) -> void:
@@ -770,9 +805,9 @@ func _update_grapple_rope_visual() -> void:
 
 
 func _grapple_in_melee_range() -> bool:
-	if _grapple_target == null or not is_instance_valid(_grapple_target):
+	if _grapple_enemy == null or not is_instance_valid(_grapple_enemy):
 		return false
-	return global_position.distance_to(_grapple_target.global_position) <= grapple_melee_range
+	return global_position.distance_to(_grapple_enemy.global_position) <= grapple_melee_range
 
 
 func _grapple_try_melee() -> void:
@@ -780,8 +815,8 @@ func _grapple_try_melee() -> void:
 		return
 	if not _grapple_in_melee_range():
 		return
-	if _grapple_target.has_method("take_grapple_punch"):
-		_grapple_target.call("take_grapple_punch", grapple_melee_damage)
+	if _grapple_enemy != null and is_instance_valid(_grapple_enemy) and _grapple_enemy.has_method("take_grapple_punch"):
+		_grapple_enemy.call("take_grapple_punch", grapple_melee_damage)
 		_grapple_melee_cd = grapple_melee_cooldown_sec
 
 
@@ -813,7 +848,7 @@ func _input(event: InputEvent) -> void:
 				elif _grapple_state == GrappleState.ROPE_READY:
 					_clear_grapple()
 					get_viewport().set_input_as_handled()
-				elif not is_on_floor() and _grapple_state == GrappleState.INACTIVE:
+				elif _grapple_state == GrappleState.INACTIVE:
 					_grapple_state = GrappleState.ROPE_READY
 					_ensure_grapple_rope_node()
 					get_viewport().set_input_as_handled()
