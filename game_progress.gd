@@ -12,6 +12,9 @@ const COST_PYRAMID_MAG := 4
 const COST_PYRAMID_RELOAD := 5
 const COST_STASIS_DMG := 6
 const COST_SAWED_PELLETS := 5
+const COST_GRAPPLE_RANGE := 5
+const COST_GRAPPLE_PULL := 6
+const COST_GRAPPLE_DAMAGE := 6
 const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
@@ -23,6 +26,9 @@ var up_pyramid_mag: int = 0
 var up_pyramid_reload: int = 0
 var up_stasis_dmg: int = 0
 var up_sawed_pellets: int = 0
+var up_grapple_range: int = 0
+var up_grapple_pull: int = 0
+var up_grapple_damage: int = 0
 
 
 func on_regular_enemy_died(world_pos: Vector3) -> void:
@@ -85,6 +91,36 @@ func try_buy_sawed_pellets() -> bool:
 	if not spend_mama(COST_SAWED_PELLETS):
 		return false
 	up_sawed_pellets += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_grapple_range() -> bool:
+	if up_grapple_range >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_GRAPPLE_RANGE):
+		return false
+	up_grapple_range += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_grapple_pull() -> bool:
+	if up_grapple_pull >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_GRAPPLE_PULL):
+		return false
+	up_grapple_pull += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_grapple_damage() -> bool:
+	if up_grapple_damage >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_GRAPPLE_DAMAGE):
+		return false
+	up_grapple_damage += 1
 	upgrades_changed.emit()
 	return true
 

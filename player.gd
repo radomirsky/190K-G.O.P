@@ -176,6 +176,22 @@ func _eff_sawed_pellets() -> int:
 	return sawed_pellet_count + GameProgress.up_sawed_pellets
 
 
+func _eff_grapple_max_range() -> float:
+	return grapple_max_range + float(GameProgress.up_grapple_range) * 6.0
+
+
+func _eff_grapple_pull_accel() -> float:
+	return grapple_pull_accel * (1.0 + float(GameProgress.up_grapple_pull) * 0.18)
+
+
+func _eff_grapple_attach_damage() -> int:
+	return grapple_attach_damage + GameProgress.up_grapple_damage
+
+
+func _eff_grapple_melee_damage() -> int:
+	return grapple_melee_damage + GameProgress.up_grapple_damage
+
+
 func _clamp_gun_ammo_to_effective() -> void:
 	_gun_ammo = mini(_gun_ammo, _eff_gun_mag())
 
@@ -490,7 +506,7 @@ func _setup_shop_ui() -> void:
 	info.name = "ShopInfo"
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(info)
-	for key in ["pyramid_mag", "pyramid_reload", "stasis_dmg", "sawed_pellets"]:
+	for key in ["pyramid_mag", "pyramid_reload", "stasis_dmg", "sawed_pellets", "grapple_range", "grapple_pull", "grapple_damage"]:
 		var btn := Button.new()
 		btn.name = "Btn_" + key
 		btn.custom_minimum_size = Vector2(420, 32)
@@ -534,6 +550,24 @@ func _refresh_shop_buttons() -> void:
 		GameProgress.up_sawed_pellets,
 		GameProgress.COST_SAWED_PELLETS
 	)
+	_set_shop_btn(
+		"Btn_grapple_range",
+		"Трос: +6м к дальности",
+		GameProgress.up_grapple_range,
+		GameProgress.COST_GRAPPLE_RANGE
+	)
+	_set_shop_btn(
+		"Btn_grapple_pull",
+		"Трос: сильнее притягивание (+18%/ур.)",
+		GameProgress.up_grapple_pull,
+		GameProgress.COST_GRAPPLE_PULL
+	)
+	_set_shop_btn(
+		"Btn_grapple_damage",
+		"Трос: +1 урон (крюк и удар)",
+		GameProgress.up_grapple_damage,
+		GameProgress.COST_GRAPPLE_DAMAGE
+	)
 
 
 func _set_shop_btn(node_name: String, title: String, tier: int, cost: int) -> void:
@@ -560,6 +594,12 @@ func _on_shop_buy_pressed(which: String) -> void:
 			ok = GameProgress.try_buy_stasis_damage()
 		"sawed_pellets":
 			ok = GameProgress.try_buy_sawed_pellets()
+		"grapple_range":
+			ok = GameProgress.try_buy_grapple_range()
+		"grapple_pull":
+			ok = GameProgress.try_buy_grapple_pull()
+		"grapple_damage":
+			ok = GameProgress.try_buy_grapple_damage()
 	if ok:
 		_clamp_gun_ammo_to_effective()
 	_refresh_shop_buttons()
@@ -708,7 +748,7 @@ func _try_grapple_attach() -> void:
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
 	var space := get_world_3d().direct_space_state
-	var to := from + dir * grapple_max_range
+	var to := from + dir * _eff_grapple_max_range()
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
@@ -746,11 +786,12 @@ func _try_grapple_attach() -> void:
 	_grapple_state = GrappleState.PULLING
 	_grapple_reel = 1.0
 	_ensure_grapple_rope_node()
-	if _grapple_enemy != null and is_instance_valid(_grapple_enemy) and grapple_attach_damage > 0:
+	var attach_dmg := _eff_grapple_attach_damage()
+	if _grapple_enemy != null and is_instance_valid(_grapple_enemy) and attach_dmg > 0:
 		if _grapple_enemy.has_method("take_grapple_hit"):
-			_grapple_enemy.call("take_grapple_hit", grapple_attach_damage)
+			_grapple_enemy.call("take_grapple_hit", attach_dmg)
 		elif _grapple_enemy.has_method("take_grapple_punch"):
-			_grapple_enemy.call("take_grapple_punch", grapple_attach_damage)
+			_grapple_enemy.call("take_grapple_punch", attach_dmg)
 
 
 func _apply_grapple_pull(delta: float) -> void:
@@ -767,7 +808,7 @@ func _apply_grapple_pull(delta: float) -> void:
 		return
 	if dist > grapple_arrive_range:
 		var dir := to.normalized()
-		var pull := grapple_pull_accel * _grapple_reel * delta
+		var pull := _eff_grapple_pull_accel() * _grapple_reel * delta
 		velocity.x += dir.x * pull
 		velocity.z += dir.z * pull
 		velocity.y += dir.y * pull * 0.82
@@ -816,7 +857,7 @@ func _grapple_try_melee() -> void:
 	if not _grapple_in_melee_range():
 		return
 	if _grapple_enemy != null and is_instance_valid(_grapple_enemy) and _grapple_enemy.has_method("take_grapple_punch"):
-		_grapple_enemy.call("take_grapple_punch", grapple_melee_damage)
+		_grapple_enemy.call("take_grapple_punch", _eff_grapple_melee_damage())
 		_grapple_melee_cd = grapple_melee_cooldown_sec
 
 
