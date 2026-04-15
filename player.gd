@@ -1459,6 +1459,7 @@ func _ensure_animatron_nodes() -> void:
 	tm.ring_sides = 14
 	tm.pipe_sides = 10
 	ring.mesh = tm
+
 	var rmat := StandardMaterial3D.new()
 	rmat.albedo_color = Color(0.13, 0.13, 0.14, 1.0)
 	rmat.emission_enabled = true
