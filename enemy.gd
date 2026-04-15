@@ -186,6 +186,15 @@ func take_grapple_hit(damage: int) -> void:
 	_take_hit(damage)
 
 
+## Взрыв чёрной дыры аниматрона: урон по тем же правилам, что и обычное попадание.
+func take_blackhole_explosion(damage: int) -> void:
+	if _dead:
+		return
+	if damage < 1:
+		damage = 1
+	_take_hit(damage)
+
+
 func _take_hit(amount: int = 1) -> void:
 	if _dead:
 		return

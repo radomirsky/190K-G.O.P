@@ -10,6 +10,7 @@ extends Node3D
 @export var grow_scale_end: float = 3.2
 @export var explosion_radius: float = 14.0
 @export var explosion_knockback: float = 22.0
+@export var explosion_damage: int = 4
 
 var _vel: Vector3 = Vector3.ZERO
 var _flying: bool = true
@@ -62,6 +63,7 @@ func _physics_process(delta: float) -> void:
 			if _ray_hits_enemy(old_pos, new_pos):
 				return
 			global_position = new_pos
+	if _flying or _planted:
 		_apply_suck(delta)
 
 
@@ -126,6 +128,8 @@ func _explode() -> void:
 		var dist := to.length()
 		if dist > explosion_radius or dist < 0.01:
 			continue
+		if e.has_method("take_blackhole_explosion"):
+			e.call("take_blackhole_explosion", explosion_damage)
 		var dir := to / dist
 		e.velocity += dir * explosion_knockback + Vector3.UP * (explosion_knockback * 0.4)
 	queue_free()

@@ -78,6 +78,9 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var animatron_suck_radius: float = 24.0
 @export var animatron_suck_accel: float = 26.0
 @export var animatron_suck_up: float = 0.55
+@export var animatron_explosion_radius: float = 14.0
+@export var animatron_explosion_damage: int = 4
+@export var animatron_explosion_knockback: float = 22.0
 @export var dash_speed: float = 14.5
 @export var dash_duration_sec: float = 0.14
 @export var dash_cooldown_sec: float = 0.7
@@ -1614,6 +1617,9 @@ func _fire_animatron_blackhole() -> void:
 		bh.set("suck_accel", animatron_suck_accel)
 		bh.set("suck_up", animatron_suck_up)
 		bh.set("fly_speed", animatron_blackhole_fly_speed)
+		bh.set("explosion_radius", animatron_explosion_radius)
+		bh.set("explosion_damage", animatron_explosion_damage)
+		bh.set("explosion_knockback", animatron_explosion_knockback)
 	if bh.has_method("set_initial_velocity"):
 		bh.call("set_initial_velocity", dir * animatron_blackhole_fly_speed)
 
