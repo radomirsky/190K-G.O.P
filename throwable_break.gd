@@ -42,6 +42,15 @@ func _v3_max_axis(v: Vector3) -> float:
 	return maxf(v.x, maxf(v.y, v.z))
 
 
+func _both_are_sawed_shot_cubes(a: RigidBody3D, b: RigidBody3D) -> bool:
+	return (
+		a.name == "Cube"
+		and b.name == "Cube"
+		and a.has_meta("_sawed_volley_id")
+		and b.has_meta("_sawed_volley_id")
+	)
+
+
 func _chip_cube_on_impact(big: RigidBody3D, small: RigidBody3D) -> void:
 	if (
 		not is_instance_valid(big)
@@ -184,6 +193,8 @@ func _on_body_shape_entered(
 	if body == self:
 		return
 	var other := body as RigidBody3D
+	if _both_are_sawed_shot_cubes(self, other):
+		return
 	if self.name == "Cube" and other.name == "Cube":
 		var sm := _cube_scale_mul(self)
 		var om := _cube_scale_mul(other)
