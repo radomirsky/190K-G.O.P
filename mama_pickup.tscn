@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://mamapickup001"]
+[gd_scene format=3 uid="uid://oenxcks54eqq"]
 
 [ext_resource type="Script" path="res://mama_pickup.gd" id="1_mama"]
 
