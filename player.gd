@@ -1,17 +1,19 @@
 extends CharacterBody3D
 
-enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF }
+enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF, ANIMATRON }
 enum GrappleState { INACTIVE, ROPE_READY, PULLING }
 
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
 const THROWABLE_STASIS_RING_SCENE := preload("res://throwable_stasis_ring.tscn")
+const ANIMATRON_BLACKHOLE_SCENE := preload("res://animatron_blackhole.tscn")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
 const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 const THROWABLE_COLOR_ENLARGE_HINT := Color(1.0, 0.9, 0.18, 1.0)
 const _GUN_MODEL_LOCAL_POS := Vector3(0.25, -0.22, -0.55)
 const _STASIS_GUN_LOCAL_POS := Vector3(-0.28, -0.2, -0.52)
 const _SAWED_GUN_LOCAL_POS := Vector3(0.22, -0.21, -0.48)
+const _ANIMATRON_MODEL_LOCAL_POS := Vector3(-0.02, -0.23, -0.62)
 const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 	Vector3(-0.35, 0.5, 0),
 	Vector3(0.35, 0.5, 0),
@@ -69,6 +71,12 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 ## Длительность перезарядки обреза по R.
 @export var sawed_refill_delay_sec: float = 3.5
 @export_range(0.0, 2.0, 0.05) var sawed_refill_finish_anim_sec: float = 0.4
+## Аниматрон: чёрный шар-воронка, засасывающая всех врагов.
+@export var animatron_reload_sec: float = 25.0
+@export var animatron_blackhole_lifetime_sec: float = 4.8
+@export var animatron_suck_radius: float = 24.0
+@export var animatron_suck_accel: float = 26.0
+@export var animatron_suck_up: float = 0.55
 @export var dash_speed: float = 14.5
 @export var dash_duration_sec: float = 0.14
 @export var dash_cooldown_sec: float = 0.7
@@ -132,6 +140,8 @@ var _sawed_muzzle: Node3D = null
 var _sawed_reload: float = 0.0
 var _sawed_refill_wait: float = 0.0
 var _sawed_volley_seq: int = 0
+var _animatron_cd: float = 0.0
+var _animatron_node: Node3D = null
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -293,6 +303,7 @@ func _process(_delta: float) -> void:
 			_sawed_refill_wait = 0.0
 			if sawed_refill_finish_anim_sec > 0.0:
 				_sawed_reload = sawed_refill_finish_anim_sec
+	_animatron_cd = maxf(_animatron_cd - _delta, 0.0)
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -460,6 +471,11 @@ func _update_hp_ui() -> void:
 				]
 			else:
 				_gun_label.text = "ОБРЕЗ: %d/%d  (залп %d кубов)" % [_sawed_ammo, sawed_mag_size, _eff_sawed_pellets()]
+		elif _equipped == EquippedGun.ANIMATRON:
+			if _animatron_cd > 0.0:
+				_gun_label.text = "АНИМАТРОН: перезарядка %.1fs" % [_animatron_cd]
+			else:
+				_gun_label.text = "АНИМАТРОН: готов (ЛКМ — чёрная воронка)"
 		else:
 			_gun_label.text = ""
 	if _mama_hud:
@@ -862,7 +878,7 @@ func _grapple_try_melee() -> void:
 
 
 func _cycle_weapon(step: int) -> void:
-	var guns := [EquippedGun.PYRAMID, EquippedGun.STASIS, EquippedGun.SAWED_OFF]
+	var guns := [EquippedGun.PYRAMID, EquippedGun.STASIS, EquippedGun.SAWED_OFF, EquippedGun.ANIMATRON]
 	var idx := guns.find(_equipped)
 	if idx < 0:
 		idx = 0
@@ -971,6 +987,12 @@ func _input(event: InputEvent) -> void:
 				_fire_sawed_off()
 				_sawed_cd = sawed_fire_cooldown_sec
 				_sawed_ammo -= 1
+				_update_hp_ui()
+				get_viewport().set_input_as_handled()
+				return
+			if _equipped == EquippedGun.ANIMATRON and _animatron_cd <= 0.0:
+				_fire_animatron_blackhole()
+				_animatron_cd = animatron_reload_sec
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
@@ -1198,12 +1220,15 @@ func _update_weapon_visibility() -> void:
 	_ensure_gun_nodes()
 	_ensure_stasis_nodes()
 	_ensure_sawed_nodes()
+	_ensure_animatron_nodes()
 	if _gun_node:
 		_gun_node.visible = (_equipped == EquippedGun.PYRAMID)
 	if _stasis_node:
 		_stasis_node.visible = (_equipped == EquippedGun.STASIS)
 	if _sawed_node:
 		_sawed_node.visible = (_equipped == EquippedGun.SAWED_OFF)
+	if _animatron_node:
+		_animatron_node.visible = (_equipped == EquippedGun.ANIMATRON)
 
 
 func _toggle_gun() -> void:
@@ -1390,6 +1415,30 @@ func _ensure_sawed_nodes() -> void:
 	_sawed_node.visible = false
 
 
+func _ensure_animatron_nodes() -> void:
+	if _animatron_node != null and is_instance_valid(_animatron_node):
+		return
+	if _camera == null:
+		return
+	_animatron_node = Node3D.new()
+	_animatron_node.name = "AnimatronGun"
+	_camera.add_child(_animatron_node)
+	_animatron_node.transform.origin = _ANIMATRON_MODEL_LOCAL_POS
+	var core := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.08
+	sm.height = 0.16
+	core.mesh = sm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.05, 0.05, 0.07, 1.0)
+	mat.emission_enabled = true
+	mat.emission = Color(0.12, 0.12, 0.18, 1.0)
+	mat.emission_energy_multiplier = 1.2
+	core.set_surface_override_material(0, mat)
+	_animatron_node.add_child(core)
+	_animatron_node.visible = false
+
+
 func _fire_sawed_off() -> void:
 	var scene := get_tree().current_scene
 	if scene == null or _camera == null:
@@ -1475,6 +1524,28 @@ func _fire_gun_pyramid() -> void:
 	_update_throwable_visual(pyr)
 	ThrowablesBudget.track_throwable(pyr)
 	_snap_throwable_if_world_time_frozen(pyr)
+
+
+func _fire_animatron_blackhole() -> void:
+	if _camera == null:
+		return
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var bh := ANIMATRON_BLACKHOLE_SCENE.instantiate() as Node3D
+	if bh == null:
+		return
+	scene.add_child(bh)
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	# Ставим чёрную воронку чуть впереди прицела.
+	bh.global_position = from + dir * 8.0
+	if bh.has_method("set"):
+		bh.set("lifetime_sec", animatron_blackhole_lifetime_sec)
+		bh.set("suck_radius", animatron_suck_radius)
+		bh.set("suck_accel", animatron_suck_accel)
+		bh.set("suck_up", animatron_suck_up)
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
