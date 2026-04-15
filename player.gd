@@ -412,6 +412,129 @@ func _update_hp_ui() -> void:
 		]
 
 
+func _on_mama_or_upgrades_changed(_arg = null) -> void:
+	_update_hp_ui()
+	_refresh_shop_buttons()
+
+
+func _setup_shop_ui() -> void:
+	if _shop_layer != null:
+		return
+	_shop_layer = CanvasLayer.new()
+	_shop_layer.layer = 105
+	_shop_layer.visible = false
+	add_child(_shop_layer)
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	panel.offset_left = -250.0
+	panel.offset_top = 72.0
+	panel.offset_right = 250.0
+	panel.offset_bottom = 430.0
+	_shop_layer.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+	var title := Label.new()
+	title.name = "ShopTitle"
+	title.text = "МАГАЗИН (M — открыть/закрыть, Esc — закрыть)"
+	vbox.add_child(title)
+	var info := Label.new()
+	info.name = "ShopInfo"
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(info)
+	for key in ["pyramid_mag", "pyramid_reload", "stasis_dmg", "sawed_pellets"]:
+		var btn := Button.new()
+		btn.name = "Btn_" + key
+		btn.custom_minimum_size = Vector2(420, 32)
+		btn.pressed.connect(_on_shop_buy_pressed.bind(key))
+		vbox.add_child(btn)
+	_refresh_shop_buttons()
+
+
+func _refresh_shop_buttons() -> void:
+	if _shop_layer == null:
+		return
+	var info := _shop_layer.find_child("ShopInfo", true, false) as Label
+	if info:
+		info.text = "После убийства врага выпадает «МАМА». Жетонов: %d. Убийств до босса: %d / %d." % [
+			GameProgress.mama_tokens,
+			GameProgress.regular_kills,
+			GameProgress.KILLS_FOR_BOSS,
+		]
+	_set_shop_btn(
+		"Btn_pyramid_mag",
+		"Пирамида: +2 патрона в магазин",
+		GameProgress.up_pyramid_mag,
+		GameProgress.COST_PYRAMID_MAG
+	)
+	_set_shop_btn(
+		"Btn_pyramid_reload",
+		"Пирамида: быстрее автополнение (~12%% за уровень)",
+		GameProgress.up_pyramid_reload,
+		GameProgress.COST_PYRAMID_RELOAD
+	)
+	_set_shop_btn(
+		"Btn_stasis_dmg", "Стазис: +1 урон", GameProgress.up_stasis_dmg, GameProgress.COST_STASIS_DMG
+	)
+	_set_shop_btn(
+		"Btn_sawed_pellets",
+		"Обрез: +1 куб в залпе",
+		GameProgress.up_sawed_pellets,
+		GameProgress.COST_SAWED_PELLETS
+	)
+
+
+func _set_shop_btn(node_name: String, title: String, tier: int, cost: int) -> void:
+	var b := _shop_layer.find_child(node_name, true, false) as Button
+	if b == null:
+		return
+	b.text = "%s   |   ур.%d/%d   |   цена %d МАМА" % [
+		title,
+		tier,
+		GameProgress.MAX_UPGRADE_TIER,
+		cost,
+	]
+	b.disabled = tier >= GameProgress.MAX_UPGRADE_TIER or GameProgress.mama_tokens < cost
+
+
+func _on_shop_buy_pressed(which: String) -> void:
+	var ok := false
+	match which:
+		"pyramid_mag":
+			ok = GameProgress.try_buy_pyramid_mag()
+		"pyramid_reload":
+			ok = GameProgress.try_buy_pyramid_reload()
+		"stasis_dmg":
+			ok = GameProgress.try_buy_stasis_damage()
+		"sawed_pellets":
+			ok = GameProgress.try_buy_sawed_pellets()
+	if ok:
+		_clamp_gun_ammo_to_effective()
+	_refresh_shop_buttons()
+	_update_hp_ui()
+
+
+func _toggle_shop() -> void:
+	_shop_open = not _shop_open
+	if _shop_layer:
+		_shop_layer.visible = _shop_open
+	_refresh_shop_buttons()
+	if _shop_open:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_want_mouse_captured = false
+	else:
+		_want_mouse_captured = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_center_mouse_in_viewport()
+
+
 func take_damage(amount: int) -> void:
 	if amount <= 0:
 		return
@@ -540,6 +663,10 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
+		if _shop_open:
+			_toggle_shop()
+			get_viewport().set_input_as_handled()
+			return
 		_want_mouse_captured = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_center_mouse_in_viewport()
@@ -610,6 +737,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_F and _world_actions_input_ok():
 			_toggle_stasis()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_M and _world_actions_input_ok():
+			_toggle_shop()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_H and _world_actions_input_ok():
 			_toggle_sawed_off()
