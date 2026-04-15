@@ -16,7 +16,35 @@ var _player: Node3D = null
 
 func _ready() -> void:
 	_player = get_node_or_null(player_path) as Node3D
+	if not GameProgress.boss_spawn_requested.is_connected(_on_boss_spawn_requested):
+		GameProgress.boss_spawn_requested.connect(_on_boss_spawn_requested)
 	randomize()
+
+
+func _on_boss_spawn_requested() -> void:
+	if enemy_scene == null:
+		return
+	if _player == null or not is_instance_valid(_player):
+		_player = get_node_or_null(player_path) as Node3D
+		if _player == null:
+			return
+	if get_tree().get_nodes_in_group("boss").size() > 0:
+		return
+	var b := enemy_scene.instantiate() as CharacterBody3D
+	if b == null:
+		return
+	b.is_boss = true
+	b.max_hp = 10
+	b.touch_damage = 34
+	b.move_speed = 3.1
+	add_child(b)
+	b.set("player_path", get_path_to(_player))
+	var flat := _player.global_position - global_position
+	flat.y = 0.0
+	if flat.length_squared() < 0.001:
+		flat = Vector3(0.0, 0.0, -1.0)
+	flat = flat.normalized() * 16.0
+	b.global_position = _player.global_position + flat + Vector3(0.0, spawn_height, 0.0)
 
 
 func _process(delta: float) -> void:
