@@ -41,15 +41,16 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var gun_pyramid_speed: float = 26.0
 @export var gun_fire_cooldown_sec: float = 0.12
 @export var gun_mag_size: int = 10
-## После любого выстрола, пока магазин не полон: через столько секунд патроны восстанавливаются целиком (таймер сбрасывается при каждом новом выстреле).
+## Длительность полной перезарядки пирамиды после клавиши R (апгрейд ускоряет).
 @export_range(0.4, 20.0, 0.05) var gun_full_refill_delay_sec: float = 6.0
-## Короткая анимация «дозарядки» на модели пушки после автопополнения.
+## Короткая анимация на модели пушки после пополнения магазина.
 @export_range(0.0, 1.0, 0.05) var gun_refill_finish_anim_sec: float = 0.35
 @export var stasis_ring_speed: float = 52.0
 @export var stasis_fire_cooldown_sec: float = 0.18
 @export var stasis_mag_size: int = 5
+## Длительность перезарядки стазиса по R.
 @export var stasis_refill_delay_sec: float = 5.0
-## Анимация после пополнения магазина стазиса (отдельно от пирамиды).
+## Анимация после перезарядки стазиса по R (отдельно от пирамиды).
 @export_range(0.0, 2.5, 0.05) var stasis_refill_finish_anim_sec: float = 0.6
 @export var stasis_reload_ring_spin_mul: float = 9.0
 @export_range(0.15, 0.65, 0.02) var stasis_reload_tilt_max: float = 0.38
@@ -64,6 +65,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export_range(0.2, 0.55, 0.01) var sawed_pellet_scale: float = 0.34
 @export var sawed_fire_cooldown_sec: float = 0.9
 @export var sawed_mag_size: int = 6
+## Длительность перезарядки обреза по R.
 @export var sawed_refill_delay_sec: float = 3.5
 @export_range(0.0, 2.0, 0.05) var sawed_refill_finish_anim_sec: float = 0.4
 @export var dash_speed: float = 14.5
@@ -226,7 +228,7 @@ func _process(_delta: float) -> void:
 			vp_warp.warp_mouse(rw.position + rw.size * 0.5)
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
 	_gun_reload = maxf(_gun_reload - _delta, 0.0)
-	if _gun_ammo < _eff_gun_mag() and _gun_refill_wait > 0.0:
+	if _equipped == EquippedGun.PYRAMID and _gun_refill_wait > 0.0:
 		_gun_refill_wait = maxf(_gun_refill_wait - _delta, 0.0)
 		if _gun_refill_wait <= 0.0:
 			_gun_ammo = _eff_gun_mag()
@@ -235,7 +237,7 @@ func _process(_delta: float) -> void:
 				_gun_reload = gun_refill_finish_anim_sec
 	_stasis_cd = maxf(_stasis_cd - _delta, 0.0)
 	_stasis_reload = maxf(_stasis_reload - _delta, 0.0)
-	if _stasis_ammo < stasis_mag_size and _stasis_refill_wait > 0.0:
+	if _equipped == EquippedGun.STASIS and _stasis_refill_wait > 0.0:
 		_stasis_refill_wait = maxf(_stasis_refill_wait - _delta, 0.0)
 		if _stasis_refill_wait <= 0.0:
 			_stasis_ammo = stasis_mag_size
@@ -244,7 +246,7 @@ func _process(_delta: float) -> void:
 				_stasis_reload = stasis_refill_finish_anim_sec
 	_sawed_cd = maxf(_sawed_cd - _delta, 0.0)
 	_sawed_reload = maxf(_sawed_reload - _delta, 0.0)
-	if _sawed_ammo < sawed_mag_size and _sawed_refill_wait > 0.0:
+	if _equipped == EquippedGun.SAWED_OFF and _sawed_refill_wait > 0.0:
 		_sawed_refill_wait = maxf(_sawed_refill_wait - _delta, 0.0)
 		if _sawed_refill_wait <= 0.0:
 			_sawed_ammo = sawed_mag_size
@@ -280,7 +282,7 @@ func _process(_delta: float) -> void:
 		if _gun_node:
 			var t := float(Time.get_ticks_msec()) / 1000.0
 			var k_wait := 0.0
-			if _gun_ammo < _eff_gun_mag() and _gun_refill_wait > 0.0:
+			if _gun_refill_wait > 0.0:
 				k_wait = clampf(_gun_refill_wait / maxf(_eff_gun_refill_delay(), 0.01), 0.0, 1.0)
 			var k_fin := 0.0
 			if _gun_reload > 0.0:
@@ -334,7 +336,7 @@ func _process(_delta: float) -> void:
 		if _sawed_node:
 			var ts := float(Time.get_ticks_msec()) / 1000.0
 			var kw := 0.0
-			if _sawed_ammo < sawed_mag_size and _sawed_refill_wait > 0.0:
+			if _sawed_refill_wait > 0.0:
 				kw = clampf(_sawed_refill_wait / maxf(sawed_refill_delay_sec, 0.01), 0.0, 1.0)
 			var kf := 0.0
 			if _sawed_reload > 0.0:
@@ -378,24 +380,31 @@ func _update_hp_ui() -> void:
 	if _gun_label:
 		if _equipped == EquippedGun.PYRAMID:
 			var gm := _eff_gun_mag()
-			if _gun_ammo < gm and _gun_refill_wait > 0.0:
-				_gun_label.text = "GUN: %d/%d  полн. %.1fs" % [_gun_ammo, gm, _gun_refill_wait]
+			if _gun_refill_wait > 0.0:
+				_gun_label.text = "GUN: %d/%d  перезарядка %.1fs  [R]" % [_gun_ammo, gm, _gun_refill_wait]
 			elif _gun_reload > 0.0:
 				_gun_label.text = "GUN: %d/%d  дозарядка…" % [_gun_ammo, gm]
+			elif _gun_ammo < gm:
+				_gun_label.text = "GUN: %d/%d  [R — зарядить]" % [_gun_ammo, gm]
 			else:
 				_gun_label.text = "GUN: %d/%d" % [_gun_ammo, gm]
 		elif _equipped == EquippedGun.STASIS:
-			if _stasis_ammo < stasis_mag_size and _stasis_refill_wait > 0.0:
+			if _stasis_refill_wait > 0.0:
 				_gun_label.text = (
-					"СТАЗИС: %d/%d  полн. %.1fs  [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size, _stasis_refill_wait]
+					"СТАЗИС: %d/%d  перезарядка %.1fs  [R] [ПКМ прицел]"
+					% [_stasis_ammo, stasis_mag_size, _stasis_refill_wait]
 				)
 			elif _stasis_reload > 0.0:
 				_gun_label.text = "СТАЗИС: %d/%d  дозарядка… [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size]
+			elif _stasis_ammo < stasis_mag_size:
+				_gun_label.text = (
+					"СТАЗИС: %d/%d  [R — зарядить] [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size]
+				)
 			else:
 				_gun_label.text = "СТАЗИС: %d/%d  [ПКМ прицел]" % [_stasis_ammo, stasis_mag_size]
 		elif _equipped == EquippedGun.SAWED_OFF:
-			if _sawed_ammo < sawed_mag_size and _sawed_refill_wait > 0.0:
-				_gun_label.text = "ОБРЕЗ: %d/%d  полн. %.1fs  (залп %d кубов)" % [
+			if _sawed_refill_wait > 0.0:
+				_gun_label.text = "ОБРЕЗ: %d/%d  перезарядка %.1fs  [R]  (залп %d кубов)" % [
 					_sawed_ammo,
 					sawed_mag_size,
 					_sawed_refill_wait,
@@ -403,6 +412,12 @@ func _update_hp_ui() -> void:
 				]
 			elif _sawed_reload > 0.0:
 				_gun_label.text = "ОБРЕЗ: %d/%d  дозарядка…" % [_sawed_ammo, sawed_mag_size]
+			elif _sawed_ammo < sawed_mag_size:
+				_gun_label.text = "ОБРЕЗ: %d/%d  [R — зарядить]  (залп %d кубов)" % [
+					_sawed_ammo,
+					sawed_mag_size,
+					_eff_sawed_pellets(),
+				]
 			else:
 				_gun_label.text = "ОБРЕЗ: %d/%d  (залп %d кубов)" % [_sawed_ammo, sawed_mag_size, _eff_sawed_pellets()]
 		else:
@@ -478,7 +493,7 @@ func _refresh_shop_buttons() -> void:
 	)
 	_set_shop_btn(
 		"Btn_pyramid_reload",
-		"Пирамида: быстрее автополнение (~12%% за уровень)",
+		"Пирамида: быстрее перезарядка по R (~12%% за уровень)",
 		GameProgress.up_pyramid_reload,
 		GameProgress.COST_PYRAMID_RELOAD
 	)
@@ -631,8 +646,6 @@ func _input(event: InputEvent) -> void:
 				_fire_gun_pyramid()
 				_gun_cd = gun_fire_cooldown_sec
 				_gun_ammo -= 1
-				if _gun_ammo < _eff_gun_mag():
-					_gun_refill_wait = _eff_gun_refill_delay()
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
@@ -641,8 +654,6 @@ func _input(event: InputEvent) -> void:
 				_fire_stasis_ring()
 				_stasis_cd = stasis_fire_cooldown_sec
 				_stasis_ammo -= 1
-				if _stasis_ammo < stasis_mag_size:
-					_stasis_refill_wait = stasis_refill_delay_sec
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
@@ -651,8 +662,6 @@ func _input(event: InputEvent) -> void:
 				_fire_sawed_off()
 				_sawed_cd = sawed_fire_cooldown_sec
 				_sawed_ammo -= 1
-				if _sawed_ammo < sawed_mag_size:
-					_sawed_refill_wait = sawed_refill_delay_sec
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
@@ -716,6 +725,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			and _world_actions_input_ok()
 		):
 			_spawn_throwable_pyramid()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_R or event.physical_keycode == KEY_R)
+			and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and not (event.ctrl_pressed or Input.is_key_pressed(KEY_CTRL))
+			and _world_actions_input_ok()
+		):
+			_try_start_weapon_reload()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_Z
@@ -857,15 +874,13 @@ func _reset_stasis_model_idle() -> void:
 
 
 func _cancel_gun_finish_reload_anim() -> void:
-	if _gun_reload <= 0.0:
-		return
+	_gun_refill_wait = 0.0
 	_gun_reload = 0.0
 	_reset_gun_model_idle()
 
 
 func _cancel_stasis_reload_anim() -> void:
-	if _stasis_reload <= 0.0:
-		return
+	_stasis_refill_wait = 0.0
 	_stasis_reload = 0.0
 	_reset_stasis_model_idle()
 
@@ -914,10 +929,34 @@ func _reset_sawed_model_idle() -> void:
 
 
 func _cancel_sawed_reload_anim() -> void:
-	if _sawed_reload <= 0.0:
-		return
+	_sawed_refill_wait = 0.0
 	_sawed_reload = 0.0
 	_reset_sawed_model_idle()
+
+
+func _try_start_weapon_reload() -> void:
+	match _equipped:
+		EquippedGun.PYRAMID:
+			if _gun_ammo >= _eff_gun_mag():
+				return
+			if _gun_refill_wait > 0.0 or _gun_reload > 0.0:
+				return
+			_gun_refill_wait = _eff_gun_refill_delay()
+		EquippedGun.STASIS:
+			if _stasis_ammo >= stasis_mag_size:
+				return
+			if _stasis_refill_wait > 0.0 or _stasis_reload > 0.0:
+				return
+			_stasis_refill_wait = stasis_refill_delay_sec
+		EquippedGun.SAWED_OFF:
+			if _sawed_ammo >= sawed_mag_size:
+				return
+			if _sawed_refill_wait > 0.0 or _sawed_reload > 0.0:
+				return
+			_sawed_refill_wait = sawed_refill_delay_sec
+		_:
+			return
+	_update_hp_ui()
 
 
 func _ensure_gun_nodes() -> void:
