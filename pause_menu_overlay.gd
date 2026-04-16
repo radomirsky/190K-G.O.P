@@ -1,7 +1,8 @@
 extends Control
 ## Висит поверх игры с PROCESS_MODE_ALWAYS, пока дерево сцены на паузе.
 
-signal continue_requested
+## Esc / ui_cancel: закрыть паузу или вернуться с экрана «Управление».
+signal back_or_cancel_requested
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -10,5 +11,5 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k := event as InputEventKey
 		esc = k.pressed and not k.echo and (k.keycode == KEY_ESCAPE or k.physical_keycode == KEY_ESCAPE)
 	if event.is_action_pressed("ui_cancel") or esc:
-		continue_requested.emit()
+		back_or_cancel_requested.emit()
 		get_viewport().set_input_as_handled()

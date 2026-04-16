@@ -118,6 +118,10 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var katana_cooldown_sec: float = 0.32
 @export_range(0.1, 3.0, 0.05) var katana_parry_sec: float = 1.0
 @export_range(0.0, 60.0, 0.5) var katana_parry_cooldown_sec: float = 10.0
+## Рывок катаны: средняя кнопка мыши — короткий рывок вперёд и урон лучом.
+@export_range(1.0, 6.5, 0.05) var katana_lunge_hit_range: float = 3.5
+@export_range(0.06, 0.35, 0.01) var katana_lunge_duration_sec: float = 0.13
+@export_range(0.0, 5.0, 0.05) var katana_lunge_cooldown_sec: float = 1.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -167,6 +171,7 @@ var _katana_parry_t: float = 0.0
 var _katana_parry_cd: float = 0.0
 var _katana_parry_flash_t: float = 0.0
 var _katana_blade_mat: StandardMaterial3D = null
+var _katana_lunge_cd: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -189,6 +194,9 @@ var _death_panel: PanelContainer = null
 var _death_visible: bool = false
 var _pause_layer: CanvasLayer = null
 var _pause_overlay: Control = null
+var _pause_main_panel: Control = null
+var _pause_controls_root: Control = null
+var _pause_hint_label: Label = null
 var _pause_visible: bool = false
 var _hp_layer: CanvasLayer = null
 var _hp_label: Label = null
@@ -374,6 +382,7 @@ func _process(_delta: float) -> void:
 	_katana_parry_t = maxf(_katana_parry_t - _delta, 0.0)
 	_katana_parry_cd = maxf(_katana_parry_cd - _delta, 0.0)
 	_katana_parry_flash_t = maxf(_katana_parry_flash_t - _delta, 0.0)
+	_katana_lunge_cd = maxf(_katana_lunge_cd - _delta, 0.0)
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -961,7 +970,7 @@ func _ensure_pause_ui() -> void:
 	_pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pause_overlay.focus_mode = Control.FOCUS_ALL
 	_pause_layer.add_child(_pause_overlay)
-	_pause_overlay.continue_requested.connect(_hide_pause_menu)
+	_pause_overlay.back_or_cancel_requested.connect(_on_pause_overlay_back_or_cancel)
 
 	var blue := ColorRect.new()
 	blue.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -970,11 +979,12 @@ func _ensure_pause_ui() -> void:
 	_pause_overlay.add_child(blue)
 
 	var panel := PanelContainer.new()
+	_pause_main_panel = panel
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -200
-	panel.offset_top = -80
-	panel.offset_right = 200
-	panel.offset_bottom = 80
+	panel.offset_left = -210
+	panel.offset_top = -148
+	panel.offset_right = 210
+	panel.offset_bottom = 148
 	_pause_overlay.add_child(panel)
 
 	var margin := MarginContainer.new()
@@ -986,7 +996,7 @@ func _ensure_pause_ui() -> void:
 	panel.add_child(margin)
 
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
+	v.add_theme_constant_override("separation", 10)
 	margin.add_child(v)
 
 	var title := Label.new()
@@ -996,14 +1006,65 @@ func _ensure_pause_ui() -> void:
 
 	var cont := Button.new()
 	cont.text = "Продолжить"
-	cont.custom_minimum_size = Vector2(220, 36)
+	cont.custom_minimum_size = Vector2(240, 34)
 	cont.pressed.connect(_hide_pause_menu)
 	v.add_child(cont)
 
+	var btn_help := Button.new()
+	btn_help.text = "Управление"
+	btn_help.custom_minimum_size = Vector2(240, 34)
+	btn_help.pressed.connect(_pause_show_controls)
+	v.add_child(btn_help)
+
+	var btn_exit := Button.new()
+	btn_exit.text = "Выйти из игры"
+	btn_exit.custom_minimum_size = Vector2(240, 34)
+	btn_exit.pressed.connect(_exit_game)
+	v.add_child(btn_exit)
+
 	var hint := Label.new()
+	_pause_hint_label = hint
 	hint.text = "Esc — продолжить"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(hint)
+
+	_pause_controls_root = Control.new()
+	_pause_controls_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_controls_root.visible = false
+	_pause_controls_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pause_overlay.add_child(_pause_controls_root)
+
+	var help_dim := ColorRect.new()
+	help_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	help_dim.color = Color(0.04, 0.12, 0.35, 0.94)
+	help_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pause_controls_root.add_child(help_dim)
+
+	var back_btn := Button.new()
+	back_btn.text = "Назад"
+	back_btn.custom_minimum_size = Vector2(120, 32)
+	back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	back_btn.offset_left = 16
+	back_btn.offset_top = 12
+	back_btn.offset_right = 136
+	back_btn.offset_bottom = 44
+	back_btn.pressed.connect(_pause_hide_controls)
+	_pause_controls_root.add_child(back_btn)
+
+	var sc := ScrollContainer.new()
+	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.offset_left = 16
+	sc.offset_top = 52
+	sc.offset_right = -16
+	sc.offset_bottom = -16
+	_pause_controls_root.add_child(sc)
+
+	var help_lbl := Label.new()
+	help_lbl.text = _pause_controls_help_text()
+	help_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(help_lbl)
+	call_deferred("_pause_apply_help_label_width", help_lbl)
 
 	_pause_layer.visible = false
 
@@ -1014,6 +1075,7 @@ func _show_pause_menu() -> void:
 	if _shop_open:
 		return
 	_ensure_pause_ui()
+	_pause_hide_controls()
 	_pause_visible = true
 	if _pause_layer:
 		_pause_layer.visible = true
@@ -1029,6 +1091,7 @@ func _show_pause_menu() -> void:
 func _hide_pause_menu() -> void:
 	if not _pause_visible:
 		return
+	_pause_hide_controls()
 	_pause_visible = false
 	if _pause_layer:
 		_pause_layer.visible = false
@@ -1045,6 +1108,62 @@ func _exit_game() -> void:
 	var tree := get_tree()
 	if tree:
 		tree.quit()
+
+
+func _on_pause_overlay_back_or_cancel() -> void:
+	if _pause_controls_root != null and _pause_controls_root.visible:
+		_pause_hide_controls()
+	else:
+		_hide_pause_menu()
+
+
+func _pause_show_controls() -> void:
+	if _pause_main_panel:
+		_pause_main_panel.visible = false
+	if _pause_controls_root:
+		_pause_controls_root.visible = true
+	if _pause_hint_label:
+		_pause_hint_label.text = "Esc — назад к меню"
+
+
+func _pause_hide_controls() -> void:
+	if _pause_controls_root:
+		_pause_controls_root.visible = false
+	if _pause_main_panel:
+		_pause_main_panel.visible = true
+	if _pause_hint_label:
+		_pause_hint_label.text = "Esc — продолжить"
+
+
+func _pause_controls_help_text() -> String:
+	return (
+		"Движение — WASD\n"
+		+ "Прыжок — Пробел\n"
+		+ "Рывок — левый Shift\n"
+		+ "Обзор — мышь\n"
+		+ "Смена оружия — колёсико вверх/вниз (кроме режима верёвки)\n"
+		+ "Слоты — 1 аниматрон, 2 обрез, 3 пирамида, 4 стазис, 5 катана\n"
+		+ "ЛКМ — выстрел / удар катаной / верёвка / метание\n"
+		+ "ПКМ — парирование (катана) или крюк-верёвка\n"
+		+ "СКМ (средняя кнопка мыши) — рывок катаны с уроном по направлению взгляда\n"
+		+ "E — подобрать / метнуть; Shift+E — увеличить куб / отпустить\n"
+		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
+		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
+		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
+		+ "H — обрез; M — магазин\n"
+		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
+		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
+		+ "Esc — пауза\n"
+	)
+
+
+func _pause_apply_help_label_width(lbl: Label) -> void:
+	if lbl == null or not is_instance_valid(lbl):
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	lbl.custom_minimum_size.x = maxf(320.0, vp.get_visible_rect().size.x - 80.0)
 
 
 func _pitch_limit() -> float:
@@ -1330,6 +1449,10 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				_cycle_weapon(-1)
+				get_viewport().set_input_as_handled()
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE and event.pressed:
+		if not _shop_open and not _pause_visible and _world_actions_input_ok():
+			if _equipped == EquippedGun.KATANA and _try_katana_lunge():
 				get_viewport().set_input_as_handled()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if _shop_open or GameProgress.world_time_frozen:
@@ -2030,14 +2153,12 @@ func _ensure_katana_nodes() -> void:
 	_katana_node.visible = false
 
 
-func _fire_katana_swing() -> void:
-	if _camera == null:
+func _katana_ray_damage(from: Vector3, direction: Vector3, reach: float) -> void:
+	var dir := direction.normalized()
+	if dir.length_squared() < 1e-8:
 		return
-	var ad := _aim_ray_from_dir()
-	var from: Vector3 = ad[0]
-	var dir: Vector3 = (ad[1] as Vector3).normalized()
 	var space := get_world_3d().direct_space_state
-	var to := from + dir * katana_range
+	var to := from + dir * reach
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
@@ -2056,6 +2177,36 @@ func _fire_katana_swing() -> void:
 				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
 			break
 		n = n.get_parent()
+
+
+func _try_katana_lunge() -> bool:
+	if _equipped != EquippedGun.KATANA:
+		return false
+	if _katana_lunge_cd > 0.0 or _dash_t > 0.0:
+		return false
+	if not is_on_floor():
+		return false
+	var dir := -global_transform.basis.z
+	dir.y = 0.0
+	if dir.length_squared() < 1e-6:
+		return false
+	dir = dir.normalized()
+	_dash_dir = dir
+	_dash_t = katana_lunge_duration_sec
+	_katana_lunge_cd = katana_lunge_cooldown_sec
+	var from := global_position + Vector3(0.0, 1.0, 0.0)
+	_katana_ray_damage(from, dir, katana_lunge_hit_range)
+	_katana_swing_t = _katana_swing_len
+	return true
+
+
+func _fire_katana_swing() -> void:
+	if _camera == null:
+		return
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	_katana_ray_damage(from, dir, katana_range)
 
 
 func _fire_sawed_off() -> void:
