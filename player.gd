@@ -8,6 +8,7 @@ const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
 const THROWABLE_STASIS_RING_SCENE := preload("res://throwable_stasis_ring.tscn")
 const ANIMATRON_BLACKHOLE_SCENE := preload("res://animatron_blackhole.tscn")
+const PAUSE_MENU_OVERLAY := preload("res://pause_menu_overlay.gd")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
 const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
 const THROWABLE_COLOR_ENLARGE_HINT := Color(1.0, 0.9, 0.18, 1.0)
@@ -115,6 +116,8 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var katana_range: float = 3.1
 @export var katana_damage: int = 3
 @export var katana_cooldown_sec: float = 0.32
+@export_range(0.1, 3.0, 0.05) var katana_parry_sec: float = 1.0
+@export_range(0.0, 60.0, 0.5) var katana_parry_cooldown_sec: float = 10.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -160,6 +163,10 @@ var _katana_swing_t: float = 0.0
 var _katana_swing_len: float = 0.12
 var _katana_idle_pos: Vector3 = Vector3(0.22, -0.24, -0.55)
 var _katana_idle_rot: Vector3 = Vector3.ZERO
+var _katana_parry_t: float = 0.0
+var _katana_parry_cd: float = 0.0
+var _katana_parry_flash_t: float = 0.0
+var _katana_blade_mat: StandardMaterial3D = null
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -176,6 +183,13 @@ var _hp: int = 100
 var _hp_cd: float = 0.0
 var _was_on_floor: bool = false
 var _fall_min_vy: float = 0.0
+var _dead_restart_in_progress: bool = false
+var _death_layer: CanvasLayer = null
+var _death_panel: PanelContainer = null
+var _death_visible: bool = false
+var _pause_layer: CanvasLayer = null
+var _pause_overlay: Control = null
+var _pause_visible: bool = false
 var _hp_layer: CanvasLayer = null
 var _hp_label: Label = null
 var _gun_label: Label = null
@@ -250,6 +264,9 @@ func _clamp_gun_ammo_to_effective() -> void:
 
 func _ready() -> void:
 	add_to_group("player")
+	var tree0 := get_tree()
+	if tree0:
+		tree0.paused = false
 	if _camera:
 		_camera.fov = camera_fov
 	_want_mouse_captured = true
@@ -264,6 +281,7 @@ func _ready() -> void:
 	call_deferred("_setup_aim_feedback")
 	call_deferred("_setup_hp_ui")
 	call_deferred("_setup_shop_ui")
+	call_deferred("_ensure_pause_ui")
 	if not GameProgress.mama_changed.is_connected(_on_mama_or_upgrades_changed):
 		GameProgress.mama_changed.connect(_on_mama_or_upgrades_changed)
 	if not GameProgress.upgrades_changed.is_connected(_on_mama_or_upgrades_changed):
@@ -296,6 +314,8 @@ func _restore_mouse_capture_after_focus() -> void:
 		return
 	if _shop_open:
 		return
+	if _pause_visible:
+		return
 	if _want_mouse_captured:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_center_mouse_in_viewport()
@@ -314,6 +334,7 @@ func _process(_delta: float) -> void:
 	# Таймеры и UI крутятся всегда, иначе при видимом курсоре оружие/перезарядка замирают.
 	if (
 		not _shop_open
+		and not _pause_visible
 		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		and _want_mouse_captured
 	):
@@ -350,6 +371,9 @@ func _process(_delta: float) -> void:
 				_sawed_reload = sawed_refill_finish_anim_sec
 	_animatron_cd = maxf(_animatron_cd - _delta, 0.0)
 	_katana_cd = maxf(_katana_cd - _delta, 0.0)
+	_katana_parry_t = maxf(_katana_parry_t - _delta, 0.0)
+	_katana_parry_cd = maxf(_katana_parry_cd - _delta, 0.0)
+	_katana_parry_flash_t = maxf(_katana_parry_flash_t - _delta, 0.0)
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -467,8 +491,26 @@ func _process(_delta: float) -> void:
 				k = 1.0 - clampf(_katana_swing_t / maxf(_katana_swing_len, 0.001), 0.0, 1.0)
 				# Ease in/out, чтобы не было “робота”.
 				k = sin(k * PI)
-			_katana_node.position = _katana_idle_pos + Vector3(0.06 * k, 0.03 * k, -0.10 * k)
-			_katana_node.rotation = _katana_idle_rot + Vector3(-0.35 * k, 0.65 * k, -0.15 * k)
+			# Парирование: стойка с поднятым клинком.
+			var p := 0.0
+			if _katana_parry_t > 0.0:
+				p = clampf(_katana_parry_t / maxf(katana_parry_sec, 0.001), 0.0, 1.0)
+			_katana_node.position = (
+				_katana_idle_pos
+				+ Vector3(0.06 * k, 0.03 * k, -0.10 * k)
+				+ Vector3(-0.10 * p, 0.09 * p, 0.06 * p)
+			)
+			_katana_node.rotation = (
+				_katana_idle_rot
+				+ Vector3(-0.35 * k, 0.65 * k, -0.15 * k)
+				+ Vector3(-0.25 * p, -0.55 * p, 0.35 * p)
+			)
+			# Флэш на клинке в момент парирования.
+			if _katana_blade_mat:
+				var fk := 0.0
+				if _katana_parry_flash_t > 0.0:
+					fk = clampf(_katana_parry_flash_t / 0.14, 0.0, 1.0)
+				_katana_blade_mat.emission_energy_multiplier = 0.35 + 0.9 * fk
 	else:
 		# Если катана была активна и режим сменился — возвращаем в idle.
 		if _katana_node and is_instance_valid(_katana_node):
@@ -783,10 +825,15 @@ func _toggle_shop() -> void:
 		_center_mouse_in_viewport()
 
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, source: String = "") -> void:
 	if amount <= 0:
 		return
 	if _hp_cd > 0.0:
+		return
+	if _dead_restart_in_progress:
+		return
+	# Парирование катаной блокирует урон именно от врагов.
+	if _katana_parry_t > 0.0 and source == "enemy":
 		return
 	_hp_cd = damage_invuln_sec
 	_hp = clampi(_hp - amount, 0, max_hp)
@@ -805,6 +852,10 @@ func heal(amount: int) -> void:
 func _on_player_died() -> void:
 	if not is_inside_tree():
 		return
+	if _dead_restart_in_progress:
+		return
+	_dead_restart_in_progress = true
+	_hide_pause_menu()
 	# Останавливаем управление и врагов.
 	set_process(false)
 	set_physics_process(false)
@@ -812,10 +863,188 @@ func _on_player_died() -> void:
 	for node in get_tree().get_nodes_in_group("enemy"):
 		if node is CharacterBody3D:
 			(node as CharacterBody3D).set_physics_process(false)
-	# Можно добавить простую "задержку" перед рестартом при желании — пока перезапускаем сразу.
+	_show_death_screen()
+
+
+func _restart_scene_after_death() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	tree.paused = false
+	tree.reload_current_scene()
+
+
+func _ensure_death_ui() -> void:
+	if _death_layer != null:
+		return
+	_death_layer = CanvasLayer.new()
+	_death_layer.layer = 200
+	add_child(_death_layer)
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_death_layer.add_child(root)
+
+	var red := ColorRect.new()
+	red.set_anchors_preset(Control.PRESET_FULL_RECT)
+	red.color = Color(0.85, 0.05, 0.08, 0.82)
+	root.add_child(red)
+
+	_death_panel = PanelContainer.new()
+	_death_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_death_panel.offset_left = -220
+	_death_panel.offset_top = -110
+	_death_panel.offset_right = 220
+	_death_panel.offset_bottom = 130
+	root.add_child(_death_panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_death_panel.add_child(margin)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	margin.add_child(v)
+
+	var title := Label.new()
+	title.text = "ТЫ УМЕР"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(title)
+
+	var hint := Label.new()
+	hint.text = "Esc — заново\nИли выбери кнопку ниже"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 10)
+	v.add_child(h)
+
+	var restart := Button.new()
+	restart.text = "Заново"
+	restart.custom_minimum_size = Vector2(180, 34)
+	restart.pressed.connect(_restart_scene_after_death)
+	h.add_child(restart)
+
+	var exitb := Button.new()
+	exitb.text = "Выйти"
+	exitb.custom_minimum_size = Vector2(180, 34)
+	exitb.pressed.connect(_exit_game)
+	h.add_child(exitb)
+
+	_death_layer.visible = false
+
+
+func _show_death_screen() -> void:
+	_ensure_death_ui()
+	_death_visible = true
+	if _death_layer:
+		_death_layer.visible = true
+	# Отпускаем мышь для кнопок.
+	_want_mouse_captured = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _ensure_pause_ui() -> void:
+	if _pause_layer != null:
+		return
+	_pause_layer = CanvasLayer.new()
+	_pause_layer.layer = 150
+	_pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_pause_layer)
+	var po := Control.new()
+	po.set_script(PAUSE_MENU_OVERLAY)
+	_pause_overlay = po
+	_pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_overlay.focus_mode = Control.FOCUS_ALL
+	_pause_layer.add_child(_pause_overlay)
+	_pause_overlay.continue_requested.connect(_hide_pause_menu)
+
+	var blue := ColorRect.new()
+	blue.set_anchors_preset(Control.PRESET_FULL_RECT)
+	blue.color = Color(0.12, 0.35, 0.92, 0.72)
+	blue.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pause_overlay.add_child(blue)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -200
+	panel.offset_top = -80
+	panel.offset_right = 200
+	panel.offset_bottom = 80
+	_pause_overlay.add_child(panel)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	panel.add_child(margin)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	margin.add_child(v)
+
+	var title := Label.new()
+	title.text = "Пауза"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(title)
+
+	var cont := Button.new()
+	cont.text = "Продолжить"
+	cont.custom_minimum_size = Vector2(220, 36)
+	cont.pressed.connect(_hide_pause_menu)
+	v.add_child(cont)
+
+	var hint := Label.new()
+	hint.text = "Esc — продолжить"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+
+	_pause_layer.visible = false
+
+
+func _show_pause_menu() -> void:
+	if _death_visible or _dead_restart_in_progress:
+		return
+	if _shop_open:
+		return
+	_ensure_pause_ui()
+	_pause_visible = true
+	if _pause_layer:
+		_pause_layer.visible = true
+	if _pause_overlay:
+		_pause_overlay.grab_focus()
 	var tree := get_tree()
 	if tree:
-		tree.reload_current_scene()
+		tree.paused = true
+	_want_mouse_captured = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _hide_pause_menu() -> void:
+	if not _pause_visible:
+		return
+	_pause_visible = false
+	if _pause_layer:
+		_pause_layer.visible = false
+	var tree := get_tree()
+	if tree:
+		tree.paused = false
+	if not _shop_open and not _death_visible:
+		_want_mouse_captured = true
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		_center_mouse_in_viewport()
+
+
+func _exit_game() -> void:
+	var tree := get_tree()
+	if tree:
+		tree.quit()
 
 
 func _pitch_limit() -> float:
@@ -1069,6 +1298,8 @@ func _cycle_weapon(step: int) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _pause_visible:
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		if _grapple_state != GrappleState.INACTIVE:
 			_clear_grapple()
@@ -1103,6 +1334,14 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if _shop_open or GameProgress.world_time_frozen:
 			pass
+		elif _world_actions_input_ok() and _equipped == EquippedGun.KATANA:
+			if event.pressed:
+				if _katana_parry_cd > 0.0:
+					return
+				_katana_parry_t = katana_parry_sec
+				_katana_parry_flash_t = 0.14
+				_katana_parry_cd = katana_parry_cooldown_sec
+				get_viewport().set_input_as_handled()
 		elif _world_actions_input_ok() and _equipped != EquippedGun.STASIS:
 			if event.pressed:
 				if _grapple_state == GrappleState.PULLING:
@@ -1116,7 +1355,7 @@ func _input(event: InputEvent) -> void:
 					_ensure_grapple_rope_node()
 					get_viewport().set_input_as_handled()
 	if event is InputEventMouseMotion:
-		if _shop_open:
+		if _shop_open or _pause_visible:
 			return
 		var mm := Input.mouse_mode
 		if (
@@ -1130,7 +1369,7 @@ func _input(event: InputEvent) -> void:
 			)
 	# ЛКМ: стрельба из пушки (G) или стазиса (F), иначе — метание удерживаемого (как раньше).
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if _shop_open:
+		if _shop_open or _pause_visible:
 			return
 		if not _world_actions_input_ok():
 			return
@@ -1190,16 +1429,21 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
+		if _death_visible:
+			_restart_scene_after_death()
+			get_viewport().set_input_as_handled()
+			return
 		if _shop_open:
 			_toggle_shop()
 			get_viewport().set_input_as_handled()
 			return
-		_want_mouse_captured = true
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		_center_mouse_in_viewport()
-		_look_yaw_target = rotation.y
-		_look_pitch_target = _camera_pivot.rotation.x
+		if _pause_visible:
+			_hide_pause_menu()
+			get_viewport().set_input_as_handled()
+			return
+		_show_pause_menu()
 		get_viewport().set_input_as_handled()
+		return
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SHIFT and event.location == KEY_LOCATION_LEFT:
@@ -1750,6 +1994,7 @@ func _ensure_katana_nodes() -> void:
 	_katana_node.add_child(tsuba)
 
 	var blade := MeshInstance3D.new()
+	blade.name = "Blade"
 	var blade_mesh := BoxMesh.new()
 	blade_mesh.size = Vector3(0.028, 0.04, 1.02)
 	blade.mesh = blade_mesh
@@ -1773,6 +2018,7 @@ func _ensure_katana_nodes() -> void:
 	bmat.emission_enabled = true
 	bmat.emission = Color(0.12, 0.32, 0.75, 1.0)
 	bmat.emission_energy_multiplier = 0.35
+	_katana_blade_mat = bmat
 	blade.set_surface_override_material(0, bmat)
 	blade.position = Vector3(0.0, 0.02, -0.62)
 	_katana_node.add_child(blade)
@@ -2014,7 +2260,7 @@ func _physics_process(delta: float) -> void:
 				1.0
 			)
 			var dmg := maxi(1, roundi(float(fall_damage_max) * t))
-			take_damage(dmg)
+			take_damage(dmg, "fall")
 	_was_on_floor = on_floor_after
 	if is_on_floor() and _grapple_state == GrappleState.ROPE_READY:
 		_clear_grapple()

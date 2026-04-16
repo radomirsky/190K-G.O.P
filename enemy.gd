@@ -12,13 +12,15 @@ extends CharacterBody3D
 @export var touch_damage: int = 8
 @export var touch_distance: float = 2.1
 @export var attack_cooldown_sec: float = 0.45
+@export_range(0.05, 0.8, 0.01) var attack_anim_sec: float = 0.16
+@export_range(0.0, 1.0, 0.01) var attack_anim_strength: float = 0.85
 ## "Видит игрока": дистанция и проверка лучом. Как только увидел один раз — всегда агрится.
 @export var vision_range: float = 28.0
 @export var vision_ray_height: float = 1.1
 @export var vision_requires_line_of_sight: bool = true
 @export var death_shard_impulse: float = 8.0
 @export var death_shard_up: float = 3.5
-@export_range(0, 12, 1) var death_big_shards_max: int = 4
+@export_range(0, 12, 1) var death_big_shards_max: int = 10
 @export_range(0, 12, 1) var death_small_shards_max: int = 0
 @export_range(0.2, 4.0, 0.05) var death_big_shard_size_mul: float = 2.15
 @export_range(0.2, 2.0, 0.05) var death_small_shard_size_mul: float = 0.55
@@ -46,6 +48,7 @@ extends CharacterBody3D
 
 var _break_cd: float = 0.0
 var _attack_cd: float = 0.0
+var _attack_anim: float = 0.0
 var _initial_max_hp: int = 5
 var _last_sawed_volley_id: int = -1
 var _player: Node3D = null
@@ -169,6 +172,7 @@ func _physics_process(delta: float) -> void:
 
 	_break_cd = maxf(_break_cd - delta, 0.0)
 	_attack_cd = maxf(_attack_cd - delta, 0.0)
+	_attack_anim = maxf(_attack_anim - delta, 0.0)
 	_invuln = maxf(_invuln - delta, 0.0)
 	_thrown_stun = maxf(_thrown_stun - delta, 0.0)
 	_flash = maxf(_flash - delta, 0.0)
@@ -176,6 +180,8 @@ func _physics_process(delta: float) -> void:
 		_set_humanoid_color(_base_color)
 
 	velocity.y -= gravity * delta
+
+	_update_attack_anim_visual()
 
 	if _player:
 		# Как только "увидели" игрока — сразу агро и погоня/атака.
@@ -195,6 +201,22 @@ func _physics_process(delta: float) -> void:
 				velocity.z = lerpf(velocity.z, target_xz.z, steer)
 
 	move_and_slide()
+
+
+func _update_attack_anim_visual() -> void:
+	var hum := get_node_or_null("Humanoid") as Node3D
+	if hum == null:
+		return
+	if _attack_anim <= 0.0:
+		hum.rotation.x = 0.0
+		hum.position = Vector3.ZERO
+		return
+	var t := 1.0 - clampf(_attack_anim / maxf(attack_anim_sec, 0.001), 0.0, 1.0)
+	# Делаем "удар": наклон вперёд + лёгкий рывок, с ease-кривой.
+	var k := sin(t * PI)
+	var str := attack_anim_strength * (1.35 if is_boss else 1.0)
+	hum.rotation.x = -0.7 * k * str
+	hum.position = Vector3(0.0, 0.0, -0.25 * k * str)
 
 
 func _can_see_player() -> bool:
@@ -249,7 +271,7 @@ func _compute_chase_dir() -> Vector3:
 		var rad2 := rad * rad
 		var push := Vector3.ZERO
 		for node in get_tree().get_nodes_in_group("enemy"):
-			if node == self or not node is Node3D:
+			if node == self or not (node is Node3D):
 				continue
 			var e := node as Node3D
 			var off := global_position - e.global_position
@@ -271,7 +293,8 @@ func _try_damage_player() -> void:
 		return
 	if _player.has_method("take_damage"):
 		_attack_cd = attack_cooldown_sec
-		_player.call("take_damage", touch_damage)
+		_attack_anim = maxf(_attack_anim, attack_anim_sec)
+		_player.call("take_damage", touch_damage, "enemy")
 
 
 func _set_humanoid_color(c: Color) -> void:
@@ -411,139 +434,6 @@ func _die_scatter() -> void:
 		GameProgress.spawn_boss_mama_drops(global_position)
 	else:
 		GameProgress.on_regular_enemy_died(global_position)
-	var scene := get_tree().current_scene
-	if scene == null:
-		queue_free()
-		return
-	var hum := get_node_or_null("Humanoid") as Node3D
-	if hum == null:
-		queue_free()
-		return
-	var mat_col := Color(0.95, 0.32, 0.32, 1.0)
-	for child in hum.get_children():
-		if not child is MeshInstance3D:
-			continue
-		var mi := child as MeshInstance3D
-		if mi.get_surface_override_material(0) is StandardMaterial3D:
-			mat_col = (mi.get_surface_override_material(0) as StandardMaterial3D).albedo_color
-			break
-	var scr: Script = load("res://throwable_break.gd") as Script
-	# Развал: максимум 4 больших куска + максимум 4 очень маленьких.
-	var parts: Array[MeshInstance3D] = []
-	for child in hum.get_children():
-		if child is MeshInstance3D:
-			parts.append(child as MeshInstance3D)
-	var want_parts := mini(death_big_shards_max, parts.size())
-	var step := maxi(1, parts.size() / maxi(1, want_parts))
-	var sel: Array[MeshInstance3D] = []
-	var idx := 0
-	while sel.size() < want_parts and idx < parts.size():
-		sel.append(parts[idx])
-		idx += step
-	while sel.size() < want_parts and parts.size() > 0:
-		sel.append(parts[sel.size() % parts.size()])
-
-	var BIG_MUL := maxf(death_big_shard_size_mul, 0.01)
-	var SMALL_MUL := maxf(death_small_shard_size_mul, 0.01)
-	for mi in sel:
-		var rb := RigidBody3D.new()
-		rb.set_script(scr)
-		rb.name = "BrickShard_enemy_%d" % get_instance_id()
-		rb.mass = 0.12 * pow(BIG_MUL, 3.0)
-		rb.continuous_cd = true
-		var mesh_i := MeshInstance3D.new()
-		var col := CollisionShape3D.new()
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = mat_col
-		mesh_i.set_surface_override_material(0, mat)
-		if mi.mesh is SphereMesh:
-			var src_s := mi.mesh as SphereMesh
-			var sm := SphereMesh.new()
-			sm.radius = src_s.radius * BIG_MUL
-			sm.height = src_s.height * BIG_MUL
-			mesh_i.mesh = sm
-			var sph := SphereShape3D.new()
-			sph.radius = maxf(0.05, src_s.radius * 0.95 * BIG_MUL)
-			col.shape = sph
-		else:
-			var bm := BoxMesh.new()
-			var sz := 0.85
-			if mi.mesh is BoxMesh:
-				sz = (mi.mesh as BoxMesh).size.x
-			sz *= BIG_MUL
-			bm.size = Vector3(sz, sz, sz)
-			mesh_i.mesh = bm
-			var bs := BoxShape3D.new()
-			bs.size = Vector3(sz, sz, sz)
-			col.shape = bs
-		rb.add_child(mesh_i)
-		rb.add_child(col)
-		rb.add_to_group("throwable")
-		scene.add_child(rb)
-		ThrowablesBudget.track_throwable(rb)
-		rb.global_position = mi.global_position
-		var away := (mi.global_position - global_position)
-		if away.length_squared() < 1e-6:
-			away = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
-		away = away.normalized()
-		rb.linear_velocity = away * death_shard_impulse + Vector3.UP * death_shard_up
-		rb.angular_velocity = Vector3(
-			randf_range(-8.0, 8.0), randf_range(-8.0, 8.0), randf_range(-8.0, 8.0)
-		)
-
-	# Маленькие кусочки (до 4), чтобы был “мелкий мусор”.
-	var want_small := mini(death_small_shards_max, sel.size())
-	for i in range(want_small):
-		var mi2 := sel[i]
-		var rb2 := RigidBody3D.new()
-		rb2.set_script(scr)
-		rb2.name = "BrickShard_enemy_small_%d" % get_instance_id()
-		rb2.mass = 0.12 * pow(SMALL_MUL, 3.0)
-		rb2.continuous_cd = true
-		var mesh_i2 := MeshInstance3D.new()
-		var col2 := CollisionShape3D.new()
-		var mat2 := StandardMaterial3D.new()
-		mat2.albedo_color = mat_col
-		mesh_i2.set_surface_override_material(0, mat2)
-		if mi2.mesh is SphereMesh:
-			var src_s2 := mi2.mesh as SphereMesh
-			var sm2 := SphereMesh.new()
-			sm2.radius = src_s2.radius * SMALL_MUL
-			sm2.height = src_s2.height * SMALL_MUL
-			mesh_i2.mesh = sm2
-			var sph2 := SphereShape3D.new()
-			sph2.radius = maxf(0.03, src_s2.radius * 0.95 * SMALL_MUL)
-			col2.shape = sph2
-		else:
-			var bm2 := BoxMesh.new()
-			var sz2 := 0.85
-			if mi2.mesh is BoxMesh:
-				sz2 = (mi2.mesh as BoxMesh).size.x
-			sz2 *= SMALL_MUL
-			bm2.size = Vector3(sz2, sz2, sz2)
-			mesh_i2.mesh = bm2
-			var bs2 := BoxShape3D.new()
-			bs2.size = Vector3(sz2, sz2, sz2)
-			col2.shape = bs2
-		rb2.add_child(mesh_i2)
-		rb2.add_child(col2)
-		rb2.add_to_group("throwable")
-		scene.add_child(rb2)
-		ThrowablesBudget.track_throwable(rb2)
-		# Чуть разбрасываем вокруг точки кубика.
-		rb2.global_position = mi2.global_position + Vector3(
-			randf_range(-0.12, 0.12),
-			randf_range(-0.08, 0.18),
-			randf_range(-0.12, 0.12)
-		)
-		var away2 := (rb2.global_position - global_position)
-		if away2.length_squared() < 1e-6:
-			away2 = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
-		away2 = away2.normalized()
-		rb2.linear_velocity = away2 * (death_shard_impulse * 1.15) + Vector3.UP * (death_shard_up * 1.1)
-		rb2.angular_velocity = Vector3(
-			randf_range(-12.0, 12.0), randf_range(-12.0, 12.0), randf_range(-12.0, 12.0)
-		)
 	queue_free()
 
 
