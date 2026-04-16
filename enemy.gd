@@ -11,6 +11,7 @@ extends CharacterBody3D
 @export var break_radius: float = 1.35
 @export var touch_damage: int = 8
 @export var touch_distance: float = 2.1
+@export var attack_cooldown_sec: float = 0.45
 @export var death_shard_impulse: float = 8.0
 @export var death_shard_up: float = 3.5
 @export var max_hp: int = 5
@@ -36,6 +37,7 @@ extends CharacterBody3D
 @export_range(0.0, 6.0, 0.05) var separation_strength: float = 1.65
 
 var _break_cd: float = 0.0
+var _attack_cd: float = 0.0
 var _initial_max_hp: int = 5
 var _last_sawed_volley_id: int = -1
 var _player: Node3D = null
@@ -157,6 +159,7 @@ func _physics_process(delta: float) -> void:
 		_player = get_node_or_null(player_path) as Node3D
 
 	_break_cd = maxf(_break_cd - delta, 0.0)
+	_attack_cd = maxf(_attack_cd - delta, 0.0)
 	_invuln = maxf(_invuln - delta, 0.0)
 	_thrown_stun = maxf(_thrown_stun - delta, 0.0)
 	_flash = maxf(_flash - delta, 0.0)
@@ -170,11 +173,8 @@ func _physics_process(delta: float) -> void:
 		if _thrown_stun <= 0.0:
 			var dir := _compute_chase_dir()
 			if dir.length_squared() > 0.0001:
-				var slow := 1.0
-				var d := global_position.distance_to(_player.global_position)
-				if d < touch_distance * 0.85:
-					slow = lerpf(0.25, 1.0, clampf(d / maxf(touch_distance * 0.85, 0.01), 0.0, 1.0))
-				var target_xz := dir * move_speed * slow
+				# Не "тормозим" в упор — главная цель добежать и ударить.
+				var target_xz := dir * move_speed
 				velocity.x = lerpf(velocity.x, target_xz.x, 1.0 - exp(-accel * delta))
 				velocity.z = lerpf(velocity.z, target_xz.z, 1.0 - exp(-accel * delta))
 
@@ -215,12 +215,12 @@ func _compute_chase_dir() -> Vector3:
 	return dir
 
 func _try_damage_player() -> void:
-	if _break_cd > 0.0 or _player == null:
+	if _attack_cd > 0.0 or _player == null:
 		return
 	if global_position.distance_squared_to(_player.global_position) > touch_distance * touch_distance:
 		return
 	if _player.has_method("take_damage"):
-		_break_cd = break_cooldown_sec
+		_attack_cd = attack_cooldown_sec
 		_player.call("take_damage", touch_damage)
 
 
