@@ -156,6 +156,10 @@ var _animatron_cd: float = 0.0
 var _animatron_node: Node3D = null
 var _katana_cd: float = 0.0
 var _katana_node: Node3D = null
+var _katana_swing_t: float = 0.0
+var _katana_swing_len: float = 0.12
+var _katana_idle_pos: Vector3 = Vector3(0.22, -0.24, -0.55)
+var _katana_idle_rot: Vector3 = Vector3.ZERO
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -453,6 +457,23 @@ func _process(_delta: float) -> void:
 			var ring := _animatron_node.get_node_or_null("Ring") as MeshInstance3D
 			if ring:
 				ring.rotation = Vector3(PI / 2.0, ta * 3.2, sin(ta * 6.0) * 0.2 * k)
+	elif _equipped == EquippedGun.KATANA:
+		_ensure_katana_nodes()
+		if _katana_node:
+			# Быстрый взмах: вперёд → назад, с небольшим подъёмом/поворотом.
+			_katana_swing_t = maxf(_katana_swing_t - _delta, 0.0)
+			var k := 0.0
+			if _katana_swing_t > 0.0:
+				k = 1.0 - clampf(_katana_swing_t / maxf(_katana_swing_len, 0.001), 0.0, 1.0)
+				# Ease in/out, чтобы не было “робота”.
+				k = sin(k * PI)
+			_katana_node.position = _katana_idle_pos + Vector3(0.06 * k, 0.03 * k, -0.10 * k)
+			_katana_node.rotation = _katana_idle_rot + Vector3(-0.35 * k, 0.65 * k, -0.15 * k)
+	else:
+		# Если катана была активна и режим сменился — возвращаем в idle.
+		if _katana_node and is_instance_valid(_katana_node):
+			_katana_node.position = _katana_idle_pos
+			_katana_node.rotation = _katana_idle_rot
 
 
 func _setup_hp_ui() -> void:
@@ -1155,6 +1176,7 @@ func _input(event: InputEvent) -> void:
 				return
 			if _equipped == EquippedGun.KATANA and _katana_cd <= 0.0:
 				_fire_katana_swing()
+				_katana_swing_t = _katana_swing_len
 				var kspd := pow(0.9, float(GameProgress.up_katana_speed))
 				_katana_cd = maxf(0.08, katana_cooldown_sec * kspd)
 				get_viewport().set_input_as_handled()
@@ -1682,7 +1704,8 @@ func _ensure_katana_nodes() -> void:
 	_katana_node = Node3D.new()
 	_katana_node.name = "Katana"
 	_camera.add_child(_katana_node)
-	_katana_node.transform.origin = Vector3(0.22, -0.24, -0.55)
+	_katana_node.transform.origin = _katana_idle_pos
+	_katana_node.rotation = _katana_idle_rot
 
 	var handle := MeshInstance3D.new()
 	var handle_mesh := CylinderMesh.new()

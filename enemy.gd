@@ -18,6 +18,10 @@ extends CharacterBody3D
 @export var vision_requires_line_of_sight: bool = true
 @export var death_shard_impulse: float = 8.0
 @export var death_shard_up: float = 3.5
+@export_range(0, 12, 1) var death_big_shards_max: int = 4
+@export_range(0, 12, 1) var death_small_shards_max: int = 0
+@export_range(0.2, 4.0, 0.05) var death_big_shard_size_mul: float = 2.15
+@export_range(0.2, 2.0, 0.05) var death_small_shard_size_mul: float = 0.55
 @export var max_hp: int = 5
 ## Босс: 10 «полосок» HP (по 1 за попадание), сильный урон в ближнем бою.
 @export var is_boss: bool = false
@@ -429,7 +433,7 @@ func _die_scatter() -> void:
 	for child in hum.get_children():
 		if child is MeshInstance3D:
 			parts.append(child as MeshInstance3D)
-	var want_parts := mini(4, parts.size())
+	var want_parts := mini(death_big_shards_max, parts.size())
 	var step := maxi(1, parts.size() / maxi(1, want_parts))
 	var sel: Array[MeshInstance3D] = []
 	var idx := 0
@@ -439,8 +443,8 @@ func _die_scatter() -> void:
 	while sel.size() < want_parts and parts.size() > 0:
 		sel.append(parts[sel.size() % parts.size()])
 
-	const BIG_MUL := 2.15
-	const SMALL_MUL := 0.55
+	var BIG_MUL := maxf(death_big_shard_size_mul, 0.01)
+	var SMALL_MUL := maxf(death_small_shard_size_mul, 0.01)
 	for mi in sel:
 		var rb := RigidBody3D.new()
 		rb.set_script(scr)
@@ -488,7 +492,9 @@ func _die_scatter() -> void:
 		)
 
 	# Маленькие кусочки (до 4), чтобы был “мелкий мусор”.
-	for mi2 in sel:
+	var want_small := mini(death_small_shards_max, sel.size())
+	for i in range(want_small):
+		var mi2 := sel[i]
 		var rb2 := RigidBody3D.new()
 		rb2.set_script(scr)
 		rb2.name = "BrickShard_enemy_small_%d" % get_instance_id()
