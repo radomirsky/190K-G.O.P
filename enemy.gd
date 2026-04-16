@@ -373,14 +373,27 @@ func _die_scatter() -> void:
 			mat_col = (mi.get_surface_override_material(0) as StandardMaterial3D).albedo_color
 			break
 	var scr: Script = load("res://throwable_break.gd") as Script
+	# Вместо множества мелких кубиков — 4 крупных куска.
+	var parts: Array[MeshInstance3D] = []
 	for child in hum.get_children():
-		if not child is MeshInstance3D:
-			continue
-		var mi := child as MeshInstance3D
+		if child is MeshInstance3D:
+			parts.append(child as MeshInstance3D)
+	var want_parts := mini(4, parts.size())
+	var step := maxi(1, parts.size() / maxi(1, want_parts))
+	var sel: Array[MeshInstance3D] = []
+	var idx := 0
+	while sel.size() < want_parts and idx < parts.size():
+		sel.append(parts[idx])
+		idx += step
+	while sel.size() < want_parts and parts.size() > 0:
+		sel.append(parts[sel.size() % parts.size()])
+
+	const SHARD_SIZE_MUL := 2.25
+	for mi in sel:
 		var rb := RigidBody3D.new()
 		rb.set_script(scr)
 		rb.name = "BrickShard_enemy_%d" % get_instance_id()
-		rb.mass = 0.12
+		rb.mass = 0.12 * pow(SHARD_SIZE_MUL, 3.0)
 		rb.continuous_cd = true
 		var mesh_i := MeshInstance3D.new()
 		var col := CollisionShape3D.new()
@@ -390,17 +403,18 @@ func _die_scatter() -> void:
 		if mi.mesh is SphereMesh:
 			var src_s := mi.mesh as SphereMesh
 			var sm := SphereMesh.new()
-			sm.radius = src_s.radius
-			sm.height = src_s.height
+			sm.radius = src_s.radius * SHARD_SIZE_MUL
+			sm.height = src_s.height * SHARD_SIZE_MUL
 			mesh_i.mesh = sm
 			var sph := SphereShape3D.new()
-			sph.radius = maxf(0.05, src_s.radius * 0.95)
+			sph.radius = maxf(0.05, src_s.radius * 0.95 * SHARD_SIZE_MUL)
 			col.shape = sph
 		else:
 			var bm := BoxMesh.new()
 			var sz := 0.85
 			if mi.mesh is BoxMesh:
 				sz = (mi.mesh as BoxMesh).size.x
+			sz *= SHARD_SIZE_MUL
 			bm.size = Vector3(sz, sz, sz)
 			mesh_i.mesh = bm
 			var bs := BoxShape3D.new()
