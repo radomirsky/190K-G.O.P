@@ -170,13 +170,16 @@ func _physics_process(delta: float) -> void:
 
 	if _player:
 		_try_damage_player()
-		if _thrown_stun <= 0.0:
-			var dir := _compute_chase_dir()
-			if dir.length_squared() > 0.0001:
-				# Не "тормозим" в упор — главная цель добежать и ударить.
-				var target_xz := dir * move_speed
-				velocity.x = lerpf(velocity.x, target_xz.x, 1.0 - exp(-accel * delta))
-				velocity.z = lerpf(velocity.z, target_xz.z, 1.0 - exp(-accel * delta))
+		var dir := _compute_chase_dir()
+		if dir.length_squared() > 0.0001:
+			# Всегда преследуем игрока. После броска лишь чуть "мягче" подруливаем,
+			# чтобы полёт/импульс сохранялся, но цель всё равно была игрок.
+			var steer := 1.0 - exp(-accel * delta)
+			if _thrown_stun > 0.0:
+				steer *= 0.18
+			var target_xz := dir * move_speed
+			velocity.x = lerpf(velocity.x, target_xz.x, steer)
+			velocity.z = lerpf(velocity.z, target_xz.z, steer)
 
 	move_and_slide()
 
@@ -373,7 +376,7 @@ func _die_scatter() -> void:
 			mat_col = (mi.get_surface_override_material(0) as StandardMaterial3D).albedo_color
 			break
 	var scr: Script = load("res://throwable_break.gd") as Script
-	# Вместо множества мелких кубиков — 4 крупных куска.
+	# Развал: максимум 4 больших куска + максимум 4 очень маленьких.
 	var parts: Array[MeshInstance3D] = []
 	for child in hum.get_children():
 		if child is MeshInstance3D:
@@ -388,12 +391,13 @@ func _die_scatter() -> void:
 	while sel.size() < want_parts and parts.size() > 0:
 		sel.append(parts[sel.size() % parts.size()])
 
-	const SHARD_SIZE_MUL := 2.25
+	const BIG_MUL := 2.15
+	const SMALL_MUL := 0.55
 	for mi in sel:
 		var rb := RigidBody3D.new()
 		rb.set_script(scr)
 		rb.name = "BrickShard_enemy_%d" % get_instance_id()
-		rb.mass = 0.12 * pow(SHARD_SIZE_MUL, 3.0)
+		rb.mass = 0.12 * pow(BIG_MUL, 3.0)
 		rb.continuous_cd = true
 		var mesh_i := MeshInstance3D.new()
 		var col := CollisionShape3D.new()
@@ -403,18 +407,18 @@ func _die_scatter() -> void:
 		if mi.mesh is SphereMesh:
 			var src_s := mi.mesh as SphereMesh
 			var sm := SphereMesh.new()
-			sm.radius = src_s.radius * SHARD_SIZE_MUL
-			sm.height = src_s.height * SHARD_SIZE_MUL
+			sm.radius = src_s.radius * BIG_MUL
+			sm.height = src_s.height * BIG_MUL
 			mesh_i.mesh = sm
 			var sph := SphereShape3D.new()
-			sph.radius = maxf(0.05, src_s.radius * 0.95 * SHARD_SIZE_MUL)
+			sph.radius = maxf(0.05, src_s.radius * 0.95 * BIG_MUL)
 			col.shape = sph
 		else:
 			var bm := BoxMesh.new()
 			var sz := 0.85
 			if mi.mesh is BoxMesh:
 				sz = (mi.mesh as BoxMesh).size.x
-			sz *= SHARD_SIZE_MUL
+			sz *= BIG_MUL
 			bm.size = Vector3(sz, sz, sz)
 			mesh_i.mesh = bm
 			var bs := BoxShape3D.new()
@@ -433,6 +437,58 @@ func _die_scatter() -> void:
 		rb.linear_velocity = away * death_shard_impulse + Vector3.UP * death_shard_up
 		rb.angular_velocity = Vector3(
 			randf_range(-8.0, 8.0), randf_range(-8.0, 8.0), randf_range(-8.0, 8.0)
+		)
+
+	# Маленькие кусочки (до 4), чтобы был “мелкий мусор”.
+	for mi2 in sel:
+		var rb2 := RigidBody3D.new()
+		rb2.set_script(scr)
+		rb2.name = "BrickShard_enemy_small_%d" % get_instance_id()
+		rb2.mass = 0.12 * pow(SMALL_MUL, 3.0)
+		rb2.continuous_cd = true
+		var mesh_i2 := MeshInstance3D.new()
+		var col2 := CollisionShape3D.new()
+		var mat2 := StandardMaterial3D.new()
+		mat2.albedo_color = mat_col
+		mesh_i2.set_surface_override_material(0, mat2)
+		if mi2.mesh is SphereMesh:
+			var src_s2 := mi2.mesh as SphereMesh
+			var sm2 := SphereMesh.new()
+			sm2.radius = src_s2.radius * SMALL_MUL
+			sm2.height = src_s2.height * SMALL_MUL
+			mesh_i2.mesh = sm2
+			var sph2 := SphereShape3D.new()
+			sph2.radius = maxf(0.03, src_s2.radius * 0.95 * SMALL_MUL)
+			col2.shape = sph2
+		else:
+			var bm2 := BoxMesh.new()
+			var sz2 := 0.85
+			if mi2.mesh is BoxMesh:
+				sz2 = (mi2.mesh as BoxMesh).size.x
+			sz2 *= SMALL_MUL
+			bm2.size = Vector3(sz2, sz2, sz2)
+			mesh_i2.mesh = bm2
+			var bs2 := BoxShape3D.new()
+			bs2.size = Vector3(sz2, sz2, sz2)
+			col2.shape = bs2
+		rb2.add_child(mesh_i2)
+		rb2.add_child(col2)
+		rb2.add_to_group("throwable")
+		scene.add_child(rb2)
+		ThrowablesBudget.track_throwable(rb2)
+		# Чуть разбрасываем вокруг точки кубика.
+		rb2.global_position = mi2.global_position + Vector3(
+			randf_range(-0.12, 0.12),
+			randf_range(-0.08, 0.18),
+			randf_range(-0.12, 0.12)
+		)
+		var away2 := (rb2.global_position - global_position)
+		if away2.length_squared() < 1e-6:
+			away2 = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
+		away2 = away2.normalized()
+		rb2.linear_velocity = away2 * (death_shard_impulse * 1.15) + Vector3.UP * (death_shard_up * 1.1)
+		rb2.angular_velocity = Vector3(
+			randf_range(-12.0, 12.0), randf_range(-12.0, 12.0), randf_range(-12.0, 12.0)
 		)
 	queue_free()
 
