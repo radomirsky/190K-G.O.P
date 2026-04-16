@@ -15,6 +15,7 @@ extends Node3D
 
 var _t: float = 0.0
 var _player: Node3D = null
+var _spawn_count: int = 0
 
 
 func _ready() -> void:
@@ -87,6 +88,11 @@ func _spawn_enemy() -> void:
 	if e == null:
 		return
 	add_child(e)
+
+	_spawn_count += 1
+	# Примерно один из десяти — стрелок.
+	if (_spawn_count % 10) == 0 and e.has_method("set"):
+		e.set("is_ranged", true)
 
 	# Прописываем цель врагу (внутри его локальной сцены Enemy).
 	if e.has_method("set"):

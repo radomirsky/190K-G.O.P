@@ -27,6 +27,14 @@ extends CharacterBody3D
 @export var max_hp: int = 5
 ## Босс: 10 «полосок» HP (по 1 за попадание), сильный урон в ближнем бою.
 @export var is_boss: bool = false
+## Стрелок: бегает на расстоянии, уклоняется и стреляет по игроку.
+@export var is_ranged: bool = false
+@export var ranged_preferred_min_dist: float = 12.0
+@export var ranged_preferred_max_dist: float = 20.0
+@export var ranged_bullet_damage: int = 4
+@export var ranged_fire_cooldown_sec: float = 1.4
+@export var ranged_mag_size: int = 6
+@export var ranged_reload_sec: float = 2.6
 @export var damage_invuln_sec: float = 0.08
 @export var hit_flash_sec: float = 1.4
 @export var hit_flash_color: Color = Color(0.18, 0.95, 0.22, 1.0)
@@ -60,6 +68,9 @@ var _base_color: Color = Color(0.22, 0.95, 0.35, 1.0)
 var _scale_applied: bool = false
 var _thrown_stun: float = 0.0
 var _aggro: bool = false
+var _ranged_ammo: int = 0
+var _ranged_fire_cd: float = 0.0
+var _ranged_reload_t: float = 0.0
 
 @onready var _break_area: Area3D = $BreakArea
 
@@ -89,6 +100,7 @@ func _ready() -> void:
 	_apply_size_scale()
 	_hp = max_hp
 	_initial_max_hp = max_hp
+	_ranged_ammo = ranged_mag_size
 	if is_boss:
 		add_to_group("boss")
 		damage_invuln_sec = 0.0
@@ -172,6 +184,8 @@ func _physics_process(delta: float) -> void:
 
 	_break_cd = maxf(_break_cd - delta, 0.0)
 	_attack_cd = maxf(_attack_cd - delta, 0.0)
+	_ranged_fire_cd = maxf(_ranged_fire_cd - delta, 0.0)
+	_ranged_reload_t = maxf(_ranged_reload_t - delta, 0.0)
 	_attack_anim = maxf(_attack_anim - delta, 0.0)
 	_invuln = maxf(_invuln - delta, 0.0)
 	_thrown_stun = maxf(_thrown_stun - delta, 0.0)
@@ -187,12 +201,15 @@ func _physics_process(delta: float) -> void:
 		# Как только "увидели" игрока — сразу агро и погоня/атака.
 		if not _aggro and _can_see_player():
 			_aggro = true
-		_try_damage_player()
+		if is_ranged:
+			_try_ranged_fire()
+		else:
+			_try_damage_player()
 		if _aggro:
-			var dir := _compute_chase_dir()
+			var dir := _compute_move_dir()
 			if dir.length_squared() > 0.0001:
-				# Всегда преследуем игрока. После броска лишь чуть "мягче" подруливаем,
-				# чтобы полёт/импульс сохранялся, но цель всё равно была игрок.
+				# Всегда движемся относительно игрока (для стрелка — с прицелом на дистанцию и уклонение).
+				# После броска лишь чуть "мягче" подруливаем, чтобы полёт/импульс сохранялся.
 				var steer := 1.0 - exp(-accel * delta)
 				if _thrown_stun > 0.0:
 					steer *= 0.18
@@ -253,7 +270,7 @@ func _can_see_player() -> bool:
 	return false
 
 
-func _compute_chase_dir() -> Vector3:
+func _compute_move_dir() -> Vector3:
 	if _player == null or not is_instance_valid(_player):
 		return Vector3.ZERO
 	var target := _player.global_position
@@ -264,6 +281,24 @@ func _compute_chase_dir() -> Vector3:
 	if to_p.length_squared() < 0.0001:
 		return Vector3.ZERO
 	var dir := to_p.normalized()
+
+	# Для стрелка приоритет — держать дистанцию и уклоняться от игрока.
+	if is_ranged:
+		var dist := sqrt(to_p.length_squared())
+		# Слишком близко — отступаем назад от игрока.
+		if dist < ranged_preferred_min_dist * 0.7:
+			dir = -dir
+		# Слишком далеко — чуть подбегаем.
+		elif dist > ranged_preferred_max_dist * 1.1:
+			# dir уже "к игроку".
+			pass
+		else:
+			# В комфортной зоне — двигаемся вбок, как уклонение.
+			var side := Vector3(to_p.z, 0.0, -to_p.x).normalized()
+			# Чуть рандома, чтобы стрелки не шли все одинаково.
+			if randi() & 1:
+				side = -side
+			dir = side
 
 	# Разбегание от других врагов, чтобы "толпа" лучше обходила игрока и не стопорилась.
 	if separation_strength > 0.0 and separation_radius > 0.0:
@@ -295,6 +330,52 @@ func _try_damage_player() -> void:
 		_attack_cd = attack_cooldown_sec
 		_attack_anim = maxf(_attack_anim, attack_anim_sec)
 		_player.call("take_damage", touch_damage, "enemy")
+
+
+func _try_ranged_fire() -> void:
+	if _player == null or not is_instance_valid(_player):
+		return
+	if _ranged_reload_t > 0.0:
+		return
+	if _ranged_fire_cd > 0.0:
+		return
+	if _ranged_ammo <= 0:
+		_ranged_reload_t = ranged_reload_sec
+		_ranged_ammo = ranged_mag_size
+		return
+	# Стреляем только когда игрок в поле зрения, на примерно средней дистанции.
+	if not _can_see_player():
+		return
+	var to_p := _player.global_position - global_position
+	to_p.y = 0.0
+	var d2 := to_p.length_squared()
+	if d2 <= 0.01:
+		return
+	var d := sqrt(d2)
+	if d < ranged_preferred_min_dist * 0.65 or d > ranged_preferred_max_dist * 1.35:
+		return
+	# Имитируем выстрел лучом из центра врага по игроку.
+	var space := get_world_3d().direct_space_state
+	var from := global_position + Vector3(0.0, 1.2, 0.0)
+	var to := _player.global_position + Vector3(0.0, 1.0, 0.0)
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	q.exclude = [get_rid()]
+	var hit := space.intersect_ray(q)
+	if hit.is_empty():
+		return
+	if hit.has("collider"):
+		var col := hit["collider"] as Object
+		if col is Node:
+			var n := col as Node
+			while n != null:
+				if n == _player and _player.has_method("take_damage"):
+					_ranged_fire_cd = ranged_fire_cooldown_sec
+					_ranged_ammo -= 1
+					_player.call("take_damage", ranged_bullet_damage, "enemy")
+					return
+				n = n.get_parent()
 
 
 func _set_humanoid_color(c: Color) -> void:
