@@ -35,6 +35,9 @@ extends CharacterBody3D
 @export var ranged_fire_cooldown_sec: float = 1.4
 @export var ranged_mag_size: int = 6
 @export var ranged_reload_sec: float = 2.6
+## Уклонение от летящих вражеских снарядов (кубы, пирамида, стазис, обрез и т.д.).
+@export var projectile_avoid_radius: float = 7.5
+@export_range(0.0, 60.0, 0.5) var projectile_avoid_min_speed: float = 5.0
 @export var damage_invuln_sec: float = 0.08
 @export var hit_flash_sec: float = 1.4
 @export var hit_flash_color: Color = Color(0.18, 0.95, 0.22, 1.0)
@@ -97,6 +100,8 @@ func _ready() -> void:
 			if not got_base:
 				got_base = true
 				_base_color = dup.albedo_color
+		if is_ranged:
+			_apply_ranged_gun_visual(hum)
 	_apply_size_scale()
 	_hp = max_hp
 	_initial_max_hp = max_hp
@@ -319,7 +324,72 @@ func _compute_move_dir() -> Vector3:
 			push += (off / d) * k
 		if push.length_squared() > 0.0001:
 			dir = (dir + push.normalized() * separation_strength).normalized()
+	# Уклонение от летящих в нас снарядов игрока.
+	dir = _apply_projectile_avoidance(dir)
 	return dir
+
+
+func _apply_projectile_avoidance(base_dir: Vector3) -> Vector3:
+	if projectile_avoid_radius <= 0.0:
+		return base_dir
+	var space_dir := base_dir
+	var r2 := projectile_avoid_radius * projectile_avoid_radius
+	var avoid := Vector3.ZERO
+	for node in get_tree().get_nodes_in_group("throwable"):
+		if not node is RigidBody3D:
+			continue
+		var rb := node as RigidBody3D
+		if rb.is_in_group("held_throwable"):
+			continue
+		var to_me := global_position - rb.global_position
+		to_me.y = 0.0
+		var d2 := to_me.length_squared()
+		if d2 <= 0.0004 or d2 > r2:
+			continue
+		var vel := rb.linear_velocity
+		vel.y = 0.0
+		var spd := vel.length()
+		if spd < projectile_avoid_min_speed:
+			continue
+		# Снаряд летит примерно в нашу сторону?
+		var vdir := vel / spd
+		var tdir := to_me / sqrt(d2)
+		if vdir.dot(tdir) < 0.6:
+			continue
+		# Уклоняемся вбок относительно направления снаряда.
+		var side := vdir.cross(Vector3.UP)
+		if side.length_squared() < 0.0001:
+			side = Vector3(tdir.z, 0.0, -tdir.x)
+		side = side.normalized()
+		# Чем ближе снаряд, тем сильнее от него отходим.
+		var k := 1.0 - clampf(sqrt(d2) / projectile_avoid_radius, 0.0, 1.0)
+		avoid += side * k
+	if avoid.length_squared() <= 0.0001:
+		return base_dir
+	var dir := (space_dir + avoid.normalized() * 2.0).normalized()
+	if dir.length_squared() < 0.0001:
+		return base_dir
+	return dir
+
+
+func _apply_ranged_gun_visual(hum: Node3D) -> void:
+	var gun := MeshInstance3D.new()
+	gun.name = "Gun"
+	var m := BoxMesh.new()
+	m.size = Vector3(0.22, 0.14, 0.5)
+	gun.mesh = m
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.08, 0.08, 0.1, 1.0)
+	mat.metallic = 0.7
+	mat.roughness = 0.22
+	mat.emission_enabled = true
+	mat.emission = Color(0.16, 0.32, 0.9, 1.0)
+	mat.emission_energy_multiplier = 0.8
+	gun.set_surface_override_material(0, mat)
+	# Простейшее позиционирование «в руке» справа от корпуса.
+	gun.position = Vector3(0.65, 1.2, 0.25)
+	gun.rotation = Vector3(0.0, PI / 2.0, 0.0)
+	hum.add_child(gun)
 
 func _try_damage_player() -> void:
 	if _attack_cd > 0.0 or _player == null:
