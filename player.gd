@@ -1,7 +1,8 @@
 extends CharacterBody3D
 
-enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF, ANIMATRON }
+enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF, ANIMATRON, KATANA }
 enum GrappleState { INACTIVE, ROPE_READY, PULLING }
+enum ViewMode { FIRST, SECOND, THIRD }
 
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
@@ -96,6 +97,9 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var max_hp: int = 100
 @export var enemy_touch_damage: int = 8
 @export var damage_invuln_sec: float = 1.35
+@export_range(0.0, 60.0, 0.5) var fall_damage_min_speed: float = 12.0
+@export_range(0.0, 120.0, 0.5) var fall_damage_max_speed: float = 32.0
+@export_range(0, 200, 1) var fall_damage_max: int = 55
 ## Верёвка: ПКМ — подготовка, ЛКМ — бросок по прицелу во что угодно; колесо натягивает тягу.
 @export var grapple_max_range: float = 36.0
 @export var grapple_break_range: float = 48.0
@@ -108,6 +112,9 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export_range(0.5, 3.5, 0.05) var grapple_reel_min: float = 0.65
 @export_range(1.2, 4.0, 0.05) var grapple_reel_max: float = 2.85
 @export var grapple_reel_wheel_step: float = 0.38
+@export var katana_range: float = 3.1
+@export var katana_damage: int = 3
+@export var katana_cooldown_sec: float = 0.32
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -116,6 +123,7 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 @onready var _hold_point: Node3D = $CameraPivot/Camera3D/HoldPoint
 
 var _held: RigidBody3D = null
+var _held_enemy: CharacterBody3D = null
 var _last_player_spawned_cube: RigidBody3D = null
 var _last_spawned_exit_cb: Callable = Callable()
 var _enlarge_hint_rb: RigidBody3D = null
@@ -146,6 +154,8 @@ var _sawed_refill_wait: float = 0.0
 var _sawed_volley_seq: int = 0
 var _animatron_cd: float = 0.0
 var _animatron_node: Node3D = null
+var _katana_cd: float = 0.0
+var _katana_node: Node3D = null
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -153,12 +163,15 @@ var _cubes_world_locked: bool = false
 ## Снимок скоростей при остановке времени (Shift+Z): CharacterBody3D и RigidBody3D из сцен.
 var _world_time_snap: Dictionary = {}
 var _want_mouse_captured: bool = true
+var _view_mode: ViewMode = ViewMode.FIRST
 var _crosshair_layer: CanvasLayer = null
 var _hit_marker: MeshInstance3D = null
 var _look_yaw_target: float = 0.0
 var _look_pitch_target: float = 0.0
 var _hp: int = 100
 var _hp_cd: float = 0.0
+var _was_on_floor: bool = false
+var _fall_min_vy: float = 0.0
 var _hp_layer: CanvasLayer = null
 var _hp_label: Label = null
 var _gun_label: Label = null
@@ -238,6 +251,7 @@ func _ready() -> void:
 	_want_mouse_captured = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_center_mouse_in_viewport()
+	_apply_view_mode()
 	var win := get_window()
 	if win:
 		var cb := Callable(self, "_restore_mouse_capture_after_focus")
@@ -255,6 +269,8 @@ func _ready() -> void:
 	_look_yaw_target = rotation.y
 	_look_pitch_target = _camera_pivot.rotation.x
 	_hp = max_hp
+	_was_on_floor = is_on_floor()
+	_fall_min_vy = 0.0
 	_gun_ammo = _eff_gun_mag()
 	_stasis_ammo = stasis_mag_size
 	_sawed_ammo = sawed_mag_size
@@ -329,6 +345,7 @@ func _process(_delta: float) -> void:
 			if sawed_refill_finish_anim_sec > 0.0:
 				_sawed_reload = sawed_refill_finish_anim_sec
 	_animatron_cd = maxf(_animatron_cd - _delta, 0.0)
+	_katana_cd = maxf(_katana_cd - _delta, 0.0)
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -571,6 +588,8 @@ func _setup_shop_ui() -> void:
 		"grapple_range",
 		"grapple_pull",
 		"grapple_damage",
+		"katana_dmg",
+		"katana_speed",
 		"animatron_reload",
 		"animatron_vortex",
 		"animatron_blast",
@@ -639,6 +658,18 @@ func _refresh_shop_buttons() -> void:
 		GameProgress.COST_GRAPPLE_DAMAGE
 	)
 	_set_shop_btn(
+		"Btn_katana_dmg",
+		"Катана: +1 урон",
+		GameProgress.up_katana_dmg,
+		GameProgress.COST_KATANA_DMG
+	)
+	_set_shop_btn(
+		"Btn_katana_speed",
+		"Катана: быстрее взмах (−10% кулдаун/ур.)",
+		GameProgress.up_katana_speed,
+		GameProgress.COST_KATANA_SPEED
+	)
+	_set_shop_btn(
 		"Btn_animatron_reload",
 		"Аниматрон: быстрее перезарядка (−3.5 с за ур., мин. 8 с)",
 		GameProgress.up_animatron_reload,
@@ -688,6 +719,10 @@ func _on_shop_buy_pressed(which: String) -> void:
 			ok = GameProgress.try_buy_grapple_pull()
 		"grapple_damage":
 			ok = GameProgress.try_buy_grapple_damage()
+		"katana_dmg":
+			ok = GameProgress.try_buy_katana_damage()
+		"katana_speed":
+			ok = GameProgress.try_buy_katana_speed()
 		"animatron_reload":
 			ok = GameProgress.try_buy_animatron_reload()
 		"animatron_vortex":
@@ -735,6 +770,8 @@ func take_damage(amount: int) -> void:
 	_hp_cd = damage_invuln_sec
 	_hp = clampi(_hp - amount, 0, max_hp)
 	_update_hp_ui()
+	if _hp <= 0:
+		_on_player_died()
 
 
 func heal(amount: int) -> void:
@@ -742,6 +779,22 @@ func heal(amount: int) -> void:
 		return
 	_hp = clampi(_hp + amount, 0, max_hp)
 	_update_hp_ui()
+
+
+func _on_player_died() -> void:
+	if not is_inside_tree():
+		return
+	# Останавливаем управление и врагов.
+	set_process(false)
+	set_physics_process(false)
+	GameProgress.world_time_frozen = true
+	for node in get_tree().get_nodes_in_group("enemy"):
+		if node is CharacterBody3D:
+			(node as CharacterBody3D).set_physics_process(false)
+	# Можно добавить простую "задержку" перед рестартом при желании — пока перезапускаем сразу.
+	var tree := get_tree()
+	if tree:
+		tree.reload_current_scene()
 
 
 func _pitch_limit() -> float:
@@ -756,6 +809,32 @@ func _clamp_camera_pitch() -> void:
 func _clamp_pitch_target(p: float) -> float:
 	var lim := _pitch_limit()
 	return clampf(p, -lim, lim)
+
+
+func _cycle_view_mode() -> void:
+	match _view_mode:
+		ViewMode.FIRST:
+			_view_mode = ViewMode.SECOND
+		ViewMode.SECOND:
+			_view_mode = ViewMode.THIRD
+		_:
+			_view_mode = ViewMode.FIRST
+	_apply_view_mode()
+
+
+func _apply_view_mode() -> void:
+	if _camera == null or _camera_pivot == null:
+		return
+	# FIRST: камера в точке pivot (как сейчас).
+	# SECOND: немного назад/вверх (ощущение "за плечом").
+	# THIRD: дальше назад/выше.
+	match _view_mode:
+		ViewMode.FIRST:
+			_camera.position = Vector3.ZERO
+		ViewMode.SECOND:
+			_camera.position = Vector3(0.35, 0.12, 2.2)
+		ViewMode.THIRD:
+			_camera.position = Vector3(0.6, 0.25, 4.6)
 
 
 func _aim_ray_from_dir() -> Array:
@@ -956,7 +1035,7 @@ func _grapple_try_melee() -> void:
 
 
 func _cycle_weapon(step: int) -> void:
-	var guns := [EquippedGun.PYRAMID, EquippedGun.STASIS, EquippedGun.SAWED_OFF, EquippedGun.ANIMATRON]
+	var guns := [EquippedGun.PYRAMID, EquippedGun.STASIS, EquippedGun.SAWED_OFF, EquippedGun.ANIMATRON, EquippedGun.KATANA]
 	var idx := guns.find(_equipped)
 	if idx < 0:
 		idx = 0
@@ -1074,6 +1153,12 @@ func _input(event: InputEvent) -> void:
 				_update_hp_ui()
 				get_viewport().set_input_as_handled()
 				return
+			if _equipped == EquippedGun.KATANA and _katana_cd <= 0.0:
+				_fire_katana_swing()
+				var kspd := pow(0.9, float(GameProgress.up_katana_speed))
+				_katana_cd = maxf(0.08, katana_cooldown_sec * kspd)
+				get_viewport().set_input_as_handled()
+				return
 			if _held:
 				_throw_press_usec = Time.get_ticks_usec()
 		else:
@@ -1127,6 +1212,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			and _world_actions_input_ok()
 		):
 			_equipped = EquippedGun.STASIS
+			_update_weapon_visibility()
+			_update_hp_ui()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_5 or event.physical_keycode == KEY_5)
+			and _world_actions_input_ok()
+		):
+			_equipped = EquippedGun.KATANA
 			_update_weapon_visibility()
 			_update_hp_ui()
 			get_viewport().set_input_as_handled()
@@ -1205,6 +1298,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			and _world_actions_input_ok()
 		):
 			_arrange_cubes_humanoid()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_B or event.physical_keycode == KEY_B)
+			and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+			and _world_actions_input_ok()
+		):
+			_cycle_view_mode()
 			get_viewport().set_input_as_handled()
 		elif (
 			event.keycode == KEY_G
@@ -1331,6 +1431,7 @@ func _update_weapon_visibility() -> void:
 	_ensure_stasis_nodes()
 	_ensure_sawed_nodes()
 	_ensure_animatron_nodes()
+	_ensure_katana_nodes()
 	if _gun_node:
 		_gun_node.visible = (_equipped == EquippedGun.PYRAMID)
 	if _stasis_node:
@@ -1339,6 +1440,8 @@ func _update_weapon_visibility() -> void:
 		_sawed_node.visible = (_equipped == EquippedGun.SAWED_OFF)
 	if _animatron_node:
 		_animatron_node.visible = (_equipped == EquippedGun.ANIMATRON)
+	if _katana_node:
+		_katana_node.visible = (_equipped == EquippedGun.KATANA)
 
 
 func _toggle_gun() -> void:
@@ -1571,6 +1674,117 @@ func _ensure_animatron_nodes() -> void:
 	_animatron_node.visible = false
 
 
+func _ensure_katana_nodes() -> void:
+	if _katana_node != null and is_instance_valid(_katana_node):
+		return
+	if _camera == null:
+		return
+	_katana_node = Node3D.new()
+	_katana_node.name = "Katana"
+	_camera.add_child(_katana_node)
+	_katana_node.transform.origin = Vector3(0.22, -0.24, -0.55)
+
+	var handle := MeshInstance3D.new()
+	var handle_mesh := CylinderMesh.new()
+	handle_mesh.top_radius = 0.035
+	handle_mesh.bottom_radius = 0.035
+	handle_mesh.height = 0.26
+	handle_mesh.radial_segments = 10
+	handle.mesh = handle_mesh
+	var hmat := StandardMaterial3D.new()
+	hmat.albedo_color = Color(0.16, 0.11, 0.07, 1.0)
+	hmat.roughness = 0.65
+	hmat.metallic = 0.05
+	# Простая процедурная "текстурка" обмотки рукояти.
+	var hnoise := FastNoiseLite.new()
+	hnoise.noise_type = FastNoiseLite.TYPE_CELLULAR
+	hnoise.frequency = 9.0
+	var htex := NoiseTexture2D.new()
+	htex.width = 256
+	htex.height = 256
+	htex.noise = hnoise
+	htex.seamless = true
+	hmat.albedo_texture = htex
+	handle.set_surface_override_material(0, hmat)
+	handle.rotation = Vector3(PI / 2.0, 0.0, 0.0)
+	handle.position = Vector3(0.0, -0.04, 0.02)
+	_katana_node.add_child(handle)
+
+	var tsuba := MeshInstance3D.new()
+	var tsuba_mesh := CylinderMesh.new()
+	tsuba_mesh.top_radius = 0.06
+	tsuba_mesh.bottom_radius = 0.06
+	tsuba_mesh.height = 0.02
+	tsuba_mesh.radial_segments = 12
+	tsuba.mesh = tsuba_mesh
+	var tmat := StandardMaterial3D.new()
+	tmat.albedo_color = Color(0.35, 0.3, 0.18, 1.0)
+	tmat.metallic = 0.55
+	tmat.roughness = 0.32
+	tsuba.set_surface_override_material(0, tmat)
+	tsuba.rotation = Vector3(PI / 2.0, 0.0, 0.0)
+	tsuba.position = Vector3(0.0, 0.0, -0.06)
+	_katana_node.add_child(tsuba)
+
+	var blade := MeshInstance3D.new()
+	var blade_mesh := BoxMesh.new()
+	blade_mesh.size = Vector3(0.028, 0.04, 1.02)
+	blade.mesh = blade_mesh
+	var bmat := StandardMaterial3D.new()
+	bmat.albedo_color = Color(0.88, 0.92, 0.98, 1.0)
+	bmat.metallic = 0.9
+	bmat.roughness = 0.12
+	# Процедурная "текстурка" металла (лёгкая зернистость).
+	var bnoise := FastNoiseLite.new()
+	bnoise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	bnoise.frequency = 32.0
+	bnoise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	bnoise.fractal_octaves = 4
+	var btex := NoiseTexture2D.new()
+	btex.width = 256
+	btex.height = 256
+	btex.noise = bnoise
+	btex.seamless = true
+	bmat.roughness_texture = btex
+	bmat.roughness_texture_channel = StandardMaterial3D.TEXTURE_CHANNEL_RED
+	bmat.emission_enabled = true
+	bmat.emission = Color(0.12, 0.32, 0.75, 1.0)
+	bmat.emission_energy_multiplier = 0.35
+	blade.set_surface_override_material(0, bmat)
+	blade.position = Vector3(0.0, 0.02, -0.62)
+	_katana_node.add_child(blade)
+
+	_katana_node.visible = false
+
+
+func _fire_katana_swing() -> void:
+	if _camera == null:
+		return
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var space := get_world_3d().direct_space_state
+	var to := from + dir * katana_range
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.hit_from_inside = true
+	query.exclude = [get_rid()]
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty() or not hit.has("collider"):
+		return
+	var col: Object = hit["collider"]
+	if not col is Node:
+		return
+	var n := col as Node
+	while n != null:
+		if n.is_in_group("enemy"):
+			if n.has_method("take_katana_hit"):
+				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
+			break
+		n = n.get_parent()
+
+
 func _fire_sawed_off() -> void:
 	var scene := get_tree().current_scene
 	if scene == null or _camera == null:
@@ -1714,6 +1928,7 @@ func _animatron_aim_dir() -> Vector3:
 	return fwd
 
 func _physics_process(delta: float) -> void:
+	var on_floor_before := is_on_floor()
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	else:
@@ -1761,6 +1976,23 @@ func _physics_process(delta: float) -> void:
 
 	var move_vel := velocity
 	move_and_slide()
+	var on_floor_after := is_on_floor()
+
+	# Урон от падения: считаем минимальную вертикальную скорость в полёте и применяем при приземлении.
+	if not on_floor_before:
+		_fall_min_vy = minf(_fall_min_vy, velocity.y)
+	if (not _was_on_floor) and on_floor_after:
+		var impact_speed := -_fall_min_vy
+		_fall_min_vy = 0.0
+		if impact_speed > fall_damage_min_speed:
+			var t := clampf(
+				(impact_speed - fall_damage_min_speed) / maxf(fall_damage_max_speed - fall_damage_min_speed, 0.001),
+				0.0,
+				1.0
+			)
+			var dmg := maxi(1, roundi(float(fall_damage_max) * t))
+			take_damage(dmg)
+	_was_on_floor = on_floor_after
 	if is_on_floor() and _grapple_state == GrappleState.ROPE_READY:
 		_clear_grapple()
 	_apply_body_pushes(move_vel)
@@ -1790,6 +2022,8 @@ func _physics_process(delta: float) -> void:
 		_held.global_position = _hold_point.global_position
 		_held.linear_velocity = Vector3.ZERO
 		_held.angular_velocity = Vector3.ZERO
+	if _held_enemy:
+		_held_enemy.global_position = _hold_point.global_position
 
 	_update_enlarge_hint_target()
 	_update_aim_feedback()
@@ -2351,6 +2585,34 @@ func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:
 	return null
 
 
+func _raycast_aimed_enemy(max_dist: float) -> CharacterBody3D:
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var space := get_world_3d().direct_space_state
+	var to := from + dir * max_dist
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.hit_from_inside = true
+	var excl: Array[RID] = [get_rid()]
+	if _held != null and is_instance_valid(_held):
+		excl.append(_held.get_rid())
+	query.exclude = excl
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty() or not hit.has("collider"):
+		return null
+	var col: Object = hit["collider"]
+	if not col is Node:
+		return null
+	var n := col as Node
+	while n != null:
+		if n.is_in_group("enemy") and n is CharacterBody3D:
+			return n as CharacterBody3D
+		n = n.get_parent()
+	return null
+
+
 func _find_nearest_throwable(from_rb: RigidBody3D, max_dist: float) -> RigidBody3D:
 	var best: RigidBody3D = null
 	var best_d2 := max_dist * max_dist
@@ -2482,16 +2744,28 @@ func _apply_body_pushes(move_velocity: Vector3) -> void:
 
 
 func _try_pickup() -> void:
-	var collider := _raycast_aimed_throwable(pickup_distance)
-	if collider == null:
+	if _held_enemy != null and is_instance_valid(_held_enemy):
 		return
-	_held = collider
-	_held.add_to_group("held_throwable")
-	add_collision_exception_with(_held)
-	_held.freeze = true
-	_held.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	var collider := _raycast_aimed_throwable(pickup_distance)
+	if collider != null:
+		_held = collider
+		_held.add_to_group("held_throwable")
+		add_collision_exception_with(_held)
+		_held.freeze = true
+		_held.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		_throw_press_usec = -1
+		_update_throwable_visual(_held)
+		return
+
+	# Если не нашли "throwable" — пробуем схватить врага.
+	var e := _raycast_aimed_enemy(pickup_distance)
+	if e == null:
+		return
+	_held_enemy = e
+	add_collision_exception_with(_held_enemy)
+	_held_enemy.velocity = Vector3.ZERO
+	_held_enemy.set_physics_process(false)
 	_throw_press_usec = -1
-	_update_throwable_visual(_held)
 
 
 func _release_held() -> void:
@@ -2508,6 +2782,17 @@ func _release_held() -> void:
 	_update_throwable_visual(body)
 
 
+func _release_held_enemy() -> void:
+	if _held_enemy == null or not is_instance_valid(_held_enemy):
+		_held_enemy = null
+		return
+	var e := _held_enemy
+	remove_collision_exception_with(e)
+	e.set_physics_process(true)
+	_held_enemy = null
+	_throw_press_usec = -1
+
+
 func _apply_throw_body(body: RigidBody3D, dir: Vector3, speed: float) -> void:
 	body.remove_from_group("held_throwable")
 	remove_collision_exception_with(body)
@@ -2520,22 +2805,52 @@ func _apply_throw_body(body: RigidBody3D, dir: Vector3, speed: float) -> void:
 
 
 func _throw_held_tap() -> void:
-	if not _held:
+	if _held:
+		var body := _held
+		var charge := clampf(throw_tap_charge, 0.0, 1.0)
+		var speed := lerpf(throw_speed_min, throw_speed_max, charge)
+		_apply_throw_body(body, _throw_aim_dir(), speed)
 		return
-	var body := _held
-	var charge := clampf(throw_tap_charge, 0.0, 1.0)
-	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
-	_apply_throw_body(body, _throw_aim_dir(), speed)
+	if _held_enemy != null and is_instance_valid(_held_enemy):
+		var dir := _throw_aim_dir()
+		var charge2 := clampf(throw_tap_charge, 0.0, 1.0)
+		var speed2 := lerpf(throw_speed_min, throw_speed_max, charge2)
+		var e := _held_enemy
+		remove_collision_exception_with(e)
+		e.set_physics_process(true)
+		if e.has_method("apply_thrown_velocity"):
+			e.call("apply_thrown_velocity", dir * speed2, 0.7)
+		else:
+			e.velocity = dir * speed2
+		_held_enemy = null
+		_throw_press_usec = -1
 
 
 func _throw_held_charged() -> void:
-	if not _held:
+	if _held:
+		var body := _held
+		var elapsed_sec := (Time.get_ticks_usec() - _throw_press_usec) / 1_000_000.0
 		_throw_press_usec = -1
+		elapsed_sec = maxf(elapsed_sec, 0.0)
+		var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
+		var speed := lerpf(throw_speed_min, throw_speed_max, charge)
+		_apply_throw_body(body, _throw_aim_dir(), speed)
 		return
-	var body := _held
-	var elapsed_sec := (Time.get_ticks_usec() - _throw_press_usec) / 1_000_000.0
+	if _held_enemy == null or not is_instance_valid(_held_enemy):
+		_throw_press_usec = -1
+		_held_enemy = null
+		return
+	var elapsed_sec2 := (Time.get_ticks_usec() - _throw_press_usec) / 1_000_000.0
 	_throw_press_usec = -1
-	elapsed_sec = maxf(elapsed_sec, 0.0)
-	var charge := clampf(elapsed_sec / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
-	var speed := lerpf(throw_speed_min, throw_speed_max, charge)
-	_apply_throw_body(body, _throw_aim_dir(), speed)
+	elapsed_sec2 = maxf(elapsed_sec2, 0.0)
+	var charge2 := clampf(elapsed_sec2 / maxf(throw_charge_full_time, 0.05), 0.0, 1.0)
+	var speed2 := lerpf(throw_speed_min, throw_speed_max, charge2)
+	var dir2 := _throw_aim_dir()
+	var e2 := _held_enemy
+	remove_collision_exception_with(e2)
+	e2.set_physics_process(true)
+	if e2.has_method("apply_thrown_velocity"):
+		e2.call("apply_thrown_velocity", dir2 * speed2, 0.9)
+	else:
+		e2.velocity = dir2 * speed2
+	_held_enemy = null

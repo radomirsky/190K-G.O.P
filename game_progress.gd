@@ -18,6 +18,8 @@ const COST_GRAPPLE_DAMAGE := 6
 const COST_ANIMATRON_RELOAD := 7
 const COST_ANIMATRON_VORTEX := 6
 const COST_ANIMATRON_BLAST := 7
+const COST_KATANA_DMG := 5
+const COST_KATANA_SPEED := 5
 const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
@@ -36,6 +38,8 @@ var up_grapple_damage: int = 0
 var up_animatron_reload: int = 0
 var up_animatron_vortex: int = 0
 var up_animatron_blast: int = 0
+var up_katana_dmg: int = 0
+var up_katana_speed: int = 0
 
 
 func on_regular_enemy_died(world_pos: Vector3) -> void:
@@ -159,6 +163,26 @@ func try_buy_animatron_blast() -> bool:
 	if not spend_mama(COST_ANIMATRON_BLAST):
 		return false
 	up_animatron_blast += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_katana_damage() -> bool:
+	if up_katana_dmg >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_KATANA_DMG):
+		return false
+	up_katana_dmg += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_katana_speed() -> bool:
+	if up_katana_speed >= MAX_UPGRADE_TIER:
+		return false
+	if not spend_mama(COST_KATANA_SPEED):
+		return false
+	up_katana_speed += 1
 	upgrades_changed.emit()
 	return true
 

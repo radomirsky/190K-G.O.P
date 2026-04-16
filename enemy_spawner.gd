@@ -8,7 +8,10 @@ extends Node3D
 
 @export var spawn_radius_min: float = 10.0
 @export var spawn_radius_max: float = 18.0
-@export var spawn_height: float = 0.6
+@export var spawn_height: float = 1.25
+@export var snap_floor_ray_up: float = 10.0
+@export var snap_floor_ray_down: float = 50.0
+@export var spawn_floor_clearance: float = 0.05
 
 var _t: float = 0.0
 var _player: Node3D = null
@@ -35,6 +38,9 @@ func _on_boss_spawn_requested() -> void:
 	b.max_hp = 10
 	b.touch_damage = 34
 	b.move_speed = 3.1
+	# Босс тоже уменьшаем как обычных (в 3 раза меньше базового).
+	if b.has_method("set"):
+		b.set("size_scale", 0.33)
 	add_child(b)
 	b.set("player_path", get_path_to(_player))
 	var flat := _player.global_position - global_position
@@ -42,7 +48,9 @@ func _on_boss_spawn_requested() -> void:
 	if flat.length_squared() < 0.001:
 		flat = Vector3(0.0, 0.0, -1.0)
 	flat = flat.normalized() * 16.0
-	b.global_position = _player.global_position + flat + Vector3(0.0, spawn_height, 0.0)
+	var want := _player.global_position + flat + Vector3(0.0, spawn_height, 0.0)
+	var base := _snap_to_floor(want)
+	b.global_position = base + Vector3.UP * spawn_height
 
 
 func _process(delta: float) -> void:
@@ -87,4 +95,21 @@ func _spawn_enemy() -> void:
 	var r := randf_range(spawn_radius_min, spawn_radius_max)
 	var a := randf_range(0.0, TAU)
 	var off := Vector3(cos(a) * r, 0.0, sin(a) * r)
-	e.global_position = _player.global_position + off + Vector3(0.0, spawn_height, 0.0)
+	var want := _player.global_position + off + Vector3(0.0, spawn_height, 0.0)
+	var base := _snap_to_floor(want)
+	e.global_position = base + Vector3.UP * spawn_height
+
+
+func _snap_to_floor(want_pos: Vector3) -> Vector3:
+	var space := get_world_3d().direct_space_state
+	var from := want_pos + Vector3.UP * snap_floor_ray_up
+	var to := want_pos + Vector3.DOWN * snap_floor_ray_down
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	q.hit_from_inside = true
+	var hit := space.intersect_ray(q)
+	if hit.is_empty() or not hit.has("position"):
+		return want_pos
+	var p := hit["position"] as Vector3
+	return p + Vector3.UP * spawn_floor_clearance

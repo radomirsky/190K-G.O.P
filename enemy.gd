@@ -4,6 +4,9 @@ extends CharacterBody3D
 @export var accel: float = 18.0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 @export var player_path: NodePath = NodePath("../Player")
+@export_range(0.2, 20.0, 0.05) var size_scale: float = 0.33
+## Дополнительный множитель коллизий/дистанций (чтобы "хватать" было проще).
+@export_range(0.5, 4.0, 0.05) var collision_scale_mul: float = 1.65
 @export var break_cooldown_sec: float = 0.25
 @export var break_radius: float = 1.35
 @export var touch_damage: int = 8
@@ -27,6 +30,10 @@ extends CharacterBody3D
 @export var stasis_hit_damage: int = 2
 ## Сколько залпов обреза нужно, чтобы убить врага с начальным max_hp (урон за залп делится поровну).
 @export_range(1, 12, 1) var sawed_volleys_to_kill: int = 3
+## "Лучший AI": предсказание движения игрока и разбегание врагов, чтобы не толпились в одной точке.
+@export_range(0.0, 2.0, 0.01) var chase_prediction_sec: float = 0.35
+@export var separation_radius: float = 4.25
+@export_range(0.0, 6.0, 0.05) var separation_strength: float = 1.65
 
 var _break_cd: float = 0.0
 var _initial_max_hp: int = 5
@@ -36,7 +43,9 @@ var _dead: bool = false
 var _hp: int = 5
 var _invuln: float = 0.0
 var _flash: float = 0.0
-var _base_color: Color = Color(0.95, 0.32, 0.32, 1.0)
+var _base_color: Color = Color(0.22, 0.95, 0.35, 1.0)
+var _scale_applied: bool = false
+var _thrown_stun: float = 0.0
 
 @onready var _break_area: Area3D = $BreakArea
 
@@ -59,9 +68,11 @@ func _ready() -> void:
 			# чтобы враги не красили друг друга и чтобы "полностью зелёный" работало.
 			var dup := mat.duplicate() as StandardMaterial3D
 			mi.set_surface_override_material(0, dup)
+			dup.albedo_color = _base_color
 			if not got_base:
 				got_base = true
 				_base_color = dup.albedo_color
+	_apply_size_scale()
 	_hp = max_hp
 	_initial_max_hp = max_hp
 	if is_boss:
@@ -69,8 +80,50 @@ func _ready() -> void:
 		damage_invuln_sec = 0.0
 		var hum_b := get_node_or_null("Humanoid") as Node3D
 		if hum_b:
-			hum_b.scale *= 1.35
 			_apply_boss_sphere_visual(hum_b)
+
+
+func _apply_size_scale() -> void:
+	if _scale_applied:
+		return
+	_scale_applied = true
+	var k := maxf(size_scale, 0.01)
+	var ck := k * maxf(collision_scale_mul, 0.01)
+	# Визуал.
+	var hum := get_node_or_null("Humanoid") as Node3D
+	if hum:
+		hum.scale *= k
+	# Основная коллизия тела: оставляем "как у игрока" (капсула), масштабируем только доп. множителем.
+	var body_cs := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if body_cs and body_cs.shape:
+		if body_cs.shape is CapsuleShape3D:
+			var cs := (body_cs.shape as CapsuleShape3D).duplicate() as CapsuleShape3D
+			cs.radius *= maxf(collision_scale_mul, 0.01)
+			cs.height *= maxf(collision_scale_mul, 0.01)
+			body_cs.shape = cs
+	# Сфера попаданий/ломания (BreakArea).
+	if _break_area:
+		var bcs := _break_area.get_node_or_null("CollisionShape3D") as CollisionShape3D
+		if bcs and bcs.shape:
+			if bcs.shape is SphereShape3D:
+				var s2 := (bcs.shape as SphereShape3D).duplicate() as SphereShape3D
+				s2.radius *= ck
+				bcs.shape = s2
+			elif bcs.shape is BoxShape3D:
+				var b2 := (bcs.shape as BoxShape3D).duplicate() as BoxShape3D
+				b2.size *= ck
+				bcs.shape = b2
+	# Логические дистанции тоже масштабируем, иначе огромный враг "не достаёт".
+	break_radius *= ck
+	touch_distance *= ck
+
+
+## Игрок взял и кинул врага: сохраняем импульс и на время отключаем преследование.
+func apply_thrown_velocity(v: Vector3, stun_sec: float = 0.6) -> void:
+	if _dead:
+		return
+	_thrown_stun = maxf(_thrown_stun, stun_sec)
+	velocity = v
 
 
 func _apply_boss_sphere_visual(hum: Node3D) -> void:
@@ -105,6 +158,7 @@ func _physics_process(delta: float) -> void:
 
 	_break_cd = maxf(_break_cd - delta, 0.0)
 	_invuln = maxf(_invuln - delta, 0.0)
+	_thrown_stun = maxf(_thrown_stun - delta, 0.0)
 	_flash = maxf(_flash - delta, 0.0)
 	if _flash <= 0.0:
 		_set_humanoid_color(_base_color)
@@ -113,15 +167,52 @@ func _physics_process(delta: float) -> void:
 
 	if _player:
 		_try_damage_player()
-		var to_p := _player.global_position - global_position
-		to_p.y = 0.0
-		if to_p.length_squared() > 0.0001:
-			var dir := to_p.normalized()
-			var target_xz := dir * move_speed
-			velocity.x = lerpf(velocity.x, target_xz.x, 1.0 - exp(-accel * delta))
-			velocity.z = lerpf(velocity.z, target_xz.z, 1.0 - exp(-accel * delta))
+		if _thrown_stun <= 0.0:
+			var dir := _compute_chase_dir()
+			if dir.length_squared() > 0.0001:
+				var slow := 1.0
+				var d := global_position.distance_to(_player.global_position)
+				if d < touch_distance * 0.85:
+					slow = lerpf(0.25, 1.0, clampf(d / maxf(touch_distance * 0.85, 0.01), 0.0, 1.0))
+				var target_xz := dir * move_speed * slow
+				velocity.x = lerpf(velocity.x, target_xz.x, 1.0 - exp(-accel * delta))
+				velocity.z = lerpf(velocity.z, target_xz.z, 1.0 - exp(-accel * delta))
 
 	move_and_slide()
+
+
+func _compute_chase_dir() -> Vector3:
+	if _player == null or not is_instance_valid(_player):
+		return Vector3.ZERO
+	var target := _player.global_position
+	if chase_prediction_sec > 0.0 and _player is CharacterBody3D:
+		target += ( _player as CharacterBody3D ).velocity * chase_prediction_sec
+	var to_p := target - global_position
+	to_p.y = 0.0
+	if to_p.length_squared() < 0.0001:
+		return Vector3.ZERO
+	var dir := to_p.normalized()
+
+	# Разбегание от других врагов, чтобы "толпа" лучше обходила игрока и не стопорилась.
+	if separation_strength > 0.0 and separation_radius > 0.0:
+		var rad := separation_radius * maxf(size_scale, 1.0)
+		var rad2 := rad * rad
+		var push := Vector3.ZERO
+		for node in get_tree().get_nodes_in_group("enemy"):
+			if node == self or not node is Node3D:
+				continue
+			var e := node as Node3D
+			var off := global_position - e.global_position
+			off.y = 0.0
+			var d2 := off.length_squared()
+			if d2 <= 0.0001 or d2 > rad2:
+				continue
+			var d := sqrt(d2)
+			var k := 1.0 - clampf(d / rad, 0.0, 1.0)
+			push += (off / d) * k
+		if push.length_squared() > 0.0001:
+			dir = (dir + push.normalized() * separation_strength).normalized()
+	return dir
 
 func _try_damage_player() -> void:
 	if _break_cd > 0.0 or _player == null:
@@ -166,6 +257,15 @@ func _compute_hit_damage_from_player() -> int:
 	var mult := lerpf(proximity_damage_far_mult, proximity_damage_close_mult, t)
 	var raw := float(proximity_damage_base) * mult
 	return maxi(1, roundi(raw))
+
+
+## Попадание катаной: отдельный канал урона ближнего боя от игрока.
+func take_katana_hit(damage: int) -> void:
+	if _dead:
+		return
+	if damage < 1:
+		damage = 1
+	_take_hit(damage)
 
 
 ## Удар с верёвки (игрок притянулся ПКМ+ЛКМ в прыжке).
