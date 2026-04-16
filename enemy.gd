@@ -212,7 +212,9 @@ func _can_see_player() -> bool:
 	var hit := space.intersect_ray(q)
 	if hit.is_empty():
 		return true
-	var col := hit.get("collider", null)
+	var col: Object = null
+	if hit.has("collider"):
+		col = hit["collider"] as Object
 	if col == null:
 		return true
 	# Если по пути первым попался сам игрок/его часть — видим.
