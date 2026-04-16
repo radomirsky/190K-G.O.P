@@ -12,6 +12,10 @@ extends CharacterBody3D
 @export var touch_damage: int = 8
 @export var touch_distance: float = 2.1
 @export var attack_cooldown_sec: float = 0.45
+## "Видит игрока": дистанция и проверка лучом. Как только увидел один раз — всегда агрится.
+@export var vision_range: float = 28.0
+@export var vision_ray_height: float = 1.1
+@export var vision_requires_line_of_sight: bool = true
 @export var death_shard_impulse: float = 8.0
 @export var death_shard_up: float = 3.5
 @export var max_hp: int = 5
@@ -48,6 +52,7 @@ var _flash: float = 0.0
 var _base_color: Color = Color(0.22, 0.95, 0.35, 1.0)
 var _scale_applied: bool = false
 var _thrown_stun: float = 0.0
+var _aggro: bool = false
 
 @onready var _break_area: Area3D = $BreakArea
 
@@ -155,8 +160,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if _dead:
 		return
-	if _player == null or not is_instance_valid(_player):
-		_player = get_node_or_null(player_path) as Node3D
+	# Всегда пытаемся резолвить игрока (включая fallback по группе).
+	_player = _resolve_player()
 
 	_break_cd = maxf(_break_cd - delta, 0.0)
 	_attack_cd = maxf(_attack_cd - delta, 0.0)
@@ -169,19 +174,55 @@ func _physics_process(delta: float) -> void:
 	velocity.y -= gravity * delta
 
 	if _player:
+		# Как только "увидели" игрока — сразу агро и погоня/атака.
+		if not _aggro and _can_see_player():
+			_aggro = true
 		_try_damage_player()
-		var dir := _compute_chase_dir()
-		if dir.length_squared() > 0.0001:
-			# Всегда преследуем игрока. После броска лишь чуть "мягче" подруливаем,
-			# чтобы полёт/импульс сохранялся, но цель всё равно была игрок.
-			var steer := 1.0 - exp(-accel * delta)
-			if _thrown_stun > 0.0:
-				steer *= 0.18
-			var target_xz := dir * move_speed
-			velocity.x = lerpf(velocity.x, target_xz.x, steer)
-			velocity.z = lerpf(velocity.z, target_xz.z, steer)
+		if _aggro:
+			var dir := _compute_chase_dir()
+			if dir.length_squared() > 0.0001:
+				# Всегда преследуем игрока. После броска лишь чуть "мягче" подруливаем,
+				# чтобы полёт/импульс сохранялся, но цель всё равно была игрок.
+				var steer := 1.0 - exp(-accel * delta)
+				if _thrown_stun > 0.0:
+					steer *= 0.18
+				var target_xz := dir * move_speed
+				velocity.x = lerpf(velocity.x, target_xz.x, steer)
+				velocity.z = lerpf(velocity.z, target_xz.z, steer)
 
 	move_and_slide()
+
+
+func _can_see_player() -> bool:
+	if _player == null or not is_instance_valid(_player):
+		return false
+	var to_p := _player.global_position - global_position
+	to_p.y = 0.0
+	if to_p.length_squared() > vision_range * vision_range:
+		return false
+	if not vision_requires_line_of_sight:
+		return true
+	var space := get_world_3d().direct_space_state
+	var from := global_position + Vector3.UP * vision_ray_height
+	var to := _player.global_position + Vector3.UP * vision_ray_height
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	q.exclude = [get_rid()]
+	var hit := space.intersect_ray(q)
+	if hit.is_empty():
+		return true
+	var col := hit.get("collider", null)
+	if col == null:
+		return true
+	# Если по пути первым попался сам игрок/его часть — видим.
+	if col is Node:
+		var n := col as Node
+		while n != null:
+			if n == _player:
+				return true
+			n = n.get_parent()
+	return false
 
 
 func _compute_chase_dir() -> Vector3:
@@ -244,6 +285,11 @@ func _resolve_player() -> Node3D:
 	if _player != null and is_instance_valid(_player):
 		return _player
 	_player = get_node_or_null(player_path) as Node3D
+	if _player == null or not is_instance_valid(_player):
+		# Fallback: в сцене игрок всегда в группе "player".
+		var ps := get_tree().get_nodes_in_group("player")
+		if ps.size() > 0 and ps[0] is Node3D:
+			_player = ps[0] as Node3D
 	return _player
 
 
