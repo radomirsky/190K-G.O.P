@@ -121,7 +121,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 ## Рывок катаны: средняя кнопка мыши — короткий рывок вперёд и урон лучом.
 @export_range(1.0, 6.5, 0.05) var katana_lunge_hit_range: float = 3.5
 @export_range(0.06, 0.35, 0.01) var katana_lunge_duration_sec: float = 0.13
-@export_range(0.0, 5.0, 0.05) var katana_lunge_cooldown_sec: float = 1.0
+@export_range(0.0, 60.0, 0.1) var katana_lunge_cooldown_sec: float = 10.0
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -1145,7 +1145,7 @@ func _pause_controls_help_text() -> String:
 		+ "Слоты — 1 аниматрон, 2 обрез, 3 пирамида, 4 стазис, 5 катана\n"
 		+ "ЛКМ — выстрел / удар катаной / верёвка / метание\n"
 		+ "ПКМ — парирование (катана) или крюк-верёвка\n"
-		+ "СКМ (средняя кнопка мыши) — рывок катаны с уроном по направлению взгляда\n"
+		+ "СКМ — рывок катаны: урон по прицелу, перезарядка 10 сек\n"
 		+ "E — подобрать / метнуть; Shift+E — увеличить куб / отпустить\n"
 		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
@@ -2194,8 +2194,15 @@ func _try_katana_lunge() -> bool:
 	_dash_dir = dir
 	_dash_t = katana_lunge_duration_sec
 	_katana_lunge_cd = katana_lunge_cooldown_sec
-	var from := global_position + Vector3(0.0, 1.0, 0.0)
-	_katana_ray_damage(from, dir, katana_lunge_hit_range)
+	# Урон — луч из камеры по прицелу (как взмах), движение рывка остаётся по горизонтали.
+	if _camera != null:
+		var ad := _aim_ray_from_dir()
+		var from_cam: Vector3 = ad[0]
+		var aim_dir: Vector3 = (ad[1] as Vector3).normalized()
+		_katana_ray_damage(from_cam, aim_dir, katana_lunge_hit_range)
+	else:
+		var from_body := global_position + Vector3(0.0, 1.0, 0.0)
+		_katana_ray_damage(from_body, dir, katana_lunge_hit_range)
 	_katana_swing_t = _katana_swing_len
 	return true
 
