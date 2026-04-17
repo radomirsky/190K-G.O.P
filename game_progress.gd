@@ -20,6 +20,8 @@ const COST_ANIMATRON_VORTEX := 6
 const COST_ANIMATRON_BLAST := 7
 const COST_KATANA_DMG := 5
 const COST_KATANA_SPEED := 5
+const COST_VAN_TURRETS := 10
+const COST_VAN_REFUEL := 5
 const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
@@ -40,6 +42,8 @@ var up_animatron_vortex: int = 0
 var up_animatron_blast: int = 0
 var up_katana_dmg: int = 0
 var up_katana_speed: int = 0
+## Одноразовая покупка: бомбомёт + скорострел на управляемом фургоне.
+var van_turrets_installed: bool = false
 
 
 func on_regular_enemy_died(world_pos: Vector3) -> void:
@@ -183,6 +187,49 @@ func try_buy_katana_speed() -> bool:
 	if not spend_mama(COST_KATANA_SPEED):
 		return false
 	up_katana_speed += 1
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_van_turrets() -> bool:
+	if van_turrets_installed:
+		return false
+	if not spend_mama(COST_VAN_TURRETS):
+		return false
+	van_turrets_installed = true
+	upgrades_changed.emit()
+	return true
+
+
+func get_van_fuel_ratio_for_shop() -> float:
+	var tree := get_tree()
+	if tree == null:
+		return 1.0
+	for n in tree.get_nodes_in_group("drivable_van"):
+		if n.has_method("get_fuel_ratio"):
+			return float(n.call("get_fuel_ratio"))
+	return 1.0
+
+
+func try_buy_van_refuel() -> bool:
+	var tree := get_tree()
+	if tree == null:
+		return false
+	var vans := tree.get_nodes_in_group("drivable_van")
+	if vans.is_empty():
+		return false
+	var needs := false
+	for n in vans:
+		if n.has_method("get_fuel_ratio") and float(n.call("get_fuel_ratio")) < 0.999:
+			needs = true
+			break
+	if not needs:
+		return false
+	if not spend_mama(COST_VAN_REFUEL):
+		return false
+	for n in vans:
+		if n.has_method("refuel_full"):
+			n.call("refuel_full")
 	upgrades_changed.emit()
 	return true
 

@@ -33,6 +33,7 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export var jump_velocity: float = 4.6
 @export var mouse_sensitivity: float = 0.0025
 @export var pickup_distance: float = 2.8
+@export var van_interact_distance: float = 3.2
 @export var throw_speed_min: float = 3.5
 @export var throw_speed_max: float = 22.0
 @export var throw_charge_full_time: float = 0.85
@@ -209,6 +210,7 @@ var _hp_layer: CanvasLayer = null
 var _hp_label: Label = null
 var _gun_label: Label = null
 var _mama_hud: Label = null
+var _van_fuel_label: Label = null
 var _shop_open: bool = false
 ## Магазин открыт из зоны киоска на карте (при выходе из зоны закроется).
 var _shop_from_world_zone: bool = false
@@ -222,6 +224,12 @@ var _grapple_anchor_world: Vector3 = Vector3.ZERO
 var _grapple_line: MeshInstance3D = null
 var _grapple_melee_cd: float = 0.0
 var _grapple_reel: float = 1.0
+## Управляемый фургон (см. drivable_van.gd).
+var _driving_van: Node3D = null
+var _van_saved_parent: Node = null
+var _van_saved_index: int = 0
+var _van_saved_layer: int = 1
+var _van_saved_mask: int = 1
 
 
 func _eff_gun_mag() -> int:
@@ -293,9 +301,6 @@ func _ready() -> void:
 		var cb := Callable(self, "_restore_mouse_capture_after_focus")
 		if not win.focus_entered.is_connected(cb):
 			win.focus_entered.connect(cb)
-		var cb_out := Callable(self, "_on_window_focus_exited")
-		if not win.focus_exited.is_connected(cb_out):
-			win.focus_exited.connect(cb_out)
 	call_deferred("_setup_aim_feedback")
 	call_deferred("_setup_hp_ui")
 	call_deferred("_setup_shop_ui")
@@ -325,13 +330,6 @@ func _exit_tree() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		call_deferred("_restore_mouse_capture_after_focus")
-	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
-		# Дублируем сигнал окна (на части сборок уведомление не доходит до игрока).
-		call_deferred("_on_application_focus_lost")
-
-
-func _on_window_focus_exited() -> void:
-	call_deferred("_on_application_focus_lost")
 
 
 func _restore_mouse_capture_after_focus() -> void:
@@ -344,22 +342,6 @@ func _restore_mouse_capture_after_focus() -> void:
 	if _want_mouse_captured:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_center_mouse_in_viewport()
-
-
-## Сворачивание окна / Alt+Tab: без этого игра шла дальше и можно «умереть в туалете».
-func _on_application_focus_lost() -> void:
-	if not is_inside_tree():
-		return
-	if get_tree() == null:
-		return
-	if _pause_visible:
-		return
-	if _death_visible:
-		return
-	if _shop_open:
-		_open_pause_menu_internal()
-		return
-	_show_pause_menu()
 
 
 func _center_mouse_in_viewport() -> void:
@@ -581,6 +563,11 @@ func _setup_hp_ui() -> void:
 	_mama_hud.position = Vector2(16, 60)
 	_mama_hud.add_theme_color_override("font_color", Color(0.95, 0.85, 0.95, 0.95))
 	_hp_layer.add_child(_mama_hud)
+	_van_fuel_label = Label.new()
+	_van_fuel_label.text = ""
+	_van_fuel_label.visible = false
+	_van_fuel_label.position = Vector2(16, 84)
+	_hp_layer.add_child(_van_fuel_label)
 	_update_hp_ui()
 
 
@@ -646,6 +633,23 @@ func _update_hp_ui() -> void:
 			GameProgress.KILLS_FOR_BOSS,
 			until_boss,
 		]
+	if _van_fuel_label:
+		if _driving_van != null and is_instance_valid(_driving_van) and _driving_van.has_method("get_fuel_ratio"):
+			_van_fuel_label.visible = true
+			var fr := float(_driving_van.call("get_fuel_ratio"))
+			var pct := int(round(fr * 100.0))
+			_van_fuel_label.text = "БЕНЗИН: %d%%   (пусто — заправка в лавке, %d МАМА)" % [
+				pct,
+				GameProgress.COST_VAN_REFUEL,
+			]
+			if fr <= 0.001:
+				_van_fuel_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.28, 1.0))
+			elif fr < 0.2:
+				_van_fuel_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.35, 1.0))
+			else:
+				_van_fuel_label.add_theme_color_override("font_color", Color(0.75, 0.92, 1.0, 0.98))
+		else:
+			_van_fuel_label.visible = false
 
 
 func _on_mama_or_upgrades_changed(_arg = null) -> void:
@@ -666,7 +670,7 @@ func _setup_shop_ui() -> void:
 	panel.offset_left = -250.0
 	panel.offset_top = 72.0
 	panel.offset_right = 250.0
-	panel.offset_bottom = 540.0
+	panel.offset_bottom = 628.0
 	_shop_layer.add_child(panel)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -699,6 +703,8 @@ func _setup_shop_ui() -> void:
 		"animatron_reload",
 		"animatron_vortex",
 		"animatron_blast",
+		"van_turrets",
+		"van_refuel",
 	]:
 		var btn := Button.new()
 		btn.name = "Btn_" + key
@@ -793,6 +799,33 @@ func _refresh_shop_buttons() -> void:
 		GameProgress.up_animatron_blast,
 		GameProgress.COST_ANIMATRON_BLAST
 	)
+	_set_shop_btn_van_turrets()
+	_set_shop_btn_van_refuel()
+
+
+func _set_shop_btn_van_refuel() -> void:
+	var b := _shop_layer.find_child("Btn_van_refuel", true, false) as Button
+	if b == null:
+		return
+	var fr := GameProgress.get_van_fuel_ratio_for_shop()
+	if fr >= 0.999:
+		b.text = "Фургон: бак полон (заправка не нужна)"
+		b.disabled = true
+	else:
+		b.text = "Фургон: заправить бак   |   цена %d МАМА" % GameProgress.COST_VAN_REFUEL
+		b.disabled = GameProgress.mama_tokens < GameProgress.COST_VAN_REFUEL
+
+
+func _set_shop_btn_van_turrets() -> void:
+	var b := _shop_layer.find_child("Btn_van_turrets", true, false) as Button
+	if b == null:
+		return
+	if GameProgress.van_turrets_installed:
+		b.text = "Фургон: турели установлены (бомбомёт + скорострел)"
+		b.disabled = true
+	else:
+		b.text = "Фургон: турели на крышу — бомбы и скорострел   |   цена %d МАМА" % GameProgress.COST_VAN_TURRETS
+		b.disabled = GameProgress.mama_tokens < GameProgress.COST_VAN_TURRETS
 
 
 func _set_shop_btn(node_name: String, title: String, tier: int, cost: int) -> void:
@@ -835,6 +868,10 @@ func _on_shop_buy_pressed(which: String) -> void:
 			ok = GameProgress.try_buy_animatron_vortex()
 		"animatron_blast":
 			ok = GameProgress.try_buy_animatron_blast()
+		"van_turrets":
+			ok = GameProgress.try_buy_van_turrets()
+		"van_refuel":
+			ok = GameProgress.try_buy_van_refuel()
 	if ok:
 		_clamp_gun_ammo_to_effective()
 	_refresh_shop_buttons()
@@ -898,6 +935,7 @@ func _on_player_died() -> void:
 	if _dead_restart_in_progress:
 		return
 	_dead_restart_in_progress = true
+	exit_van()
 	_hide_pause_menu()
 	# Останавливаем управление и врагов.
 	set_process(false)
@@ -1234,7 +1272,7 @@ func _pause_controls_help_text() -> String:
 		+ "ЛКМ — выстрел / удар катаной / верёвка / метание\n"
 		+ "ПКМ — парирование (катана) или крюк-верёвка\n"
 		+ "СКМ — рывок катаны: урон по прицелу, перезарядка 10 сек\n"
-		+ "E — подобрать / метнуть; Shift+E — увеличить куб / отпустить\n"
+		+ "E — сесть в фургон / выйти; подобрать / метнуть; Shift+E — увеличить куб / отпустить\n"
 		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
 		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
@@ -1826,7 +1864,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_release_held()
 				get_viewport().set_input_as_handled()
 		elif _is_use_key(event):
-			if _held:
+			if _driving_van != null and is_instance_valid(_driving_van):
+				exit_van()
+			elif _held:
 				_throw_held_tap()
 			else:
 				_try_pickup()
@@ -2452,6 +2492,8 @@ func _animatron_aim_dir() -> Vector3:
 	return fwd
 
 func _physics_process(delta: float) -> void:
+	if _driving_van != null and is_instance_valid(_driving_van):
+		return
 	var on_floor_before := is_on_floor()
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -3267,7 +3309,92 @@ func _apply_body_pushes(move_velocity: Vector3) -> void:
 		rb.apply_central_impulse(-n_h * speed_into * rb.mass * body_push_multiplier)
 
 
+func enter_van(van: Node3D) -> void:
+	if van == null or not is_instance_valid(van) or not van.has_method("set_driver"):
+		return
+	if _driving_van != null:
+		return
+	if van.has_method("has_driver") and bool(van.call("has_driver")):
+		return
+	_driving_van = van
+	_van_saved_parent = get_parent()
+	_van_saved_index = get_index()
+	_van_saved_layer = collision_layer
+	_van_saved_mask = collision_mask
+	collision_layer = 0
+	collision_mask = 0
+	_van_saved_parent.remove_child(self)
+	van.add_child(self)
+	position = Vector3(0.0, 0.72, 0.35)
+	rotation = Vector3.ZERO
+	van.call("set_driver", self)
+
+
+func exit_van() -> void:
+	if _driving_van == null:
+		return
+	var van_ref: Node3D = _driving_van
+	_driving_van = null
+
+	var exit_g: Vector3
+	if is_instance_valid(van_ref):
+		if van_ref.has_method("clear_driver"):
+			van_ref.call("clear_driver")
+		var xform := van_ref.global_transform
+		exit_g = van_ref.global_position + xform.basis.x * 2.85 + Vector3(0.0, 0.55, 0.0)
+	else:
+		exit_g = global_position + Vector3(2.5, 0.0, 0.0)
+
+	var par := get_parent()
+	if par != null and is_instance_valid(par):
+		par.remove_child(self)
+
+	var p := _van_saved_parent
+	if p == null or not is_instance_valid(p):
+		var tree := get_tree()
+		if tree != null:
+			p = tree.current_scene
+
+	if p != null and is_instance_valid(p):
+		p.add_child(self)
+		var nch := p.get_child_count()
+		p.move_child(self, clampi(_van_saved_index, 0, maxi(0, nch - 1)))
+
+	global_position = exit_g
+	rotation = Vector3.ZERO
+	collision_layer = _van_saved_layer
+	collision_mask = _van_saved_mask
+
+
+func _try_enter_van() -> bool:
+	if _driving_van != null and is_instance_valid(_driving_van):
+		return false
+	if _held or (_held_enemy != null and is_instance_valid(_held_enemy)):
+		return false
+	var r2 := van_interact_distance * van_interact_distance
+	var best: Node3D = null
+	var best_d2 := INF
+	for n in get_tree().get_nodes_in_group("drivable_van"):
+		if not n is Node3D:
+			continue
+		var v := n as Node3D
+		if v.has_method("has_driver") and bool(v.call("has_driver")):
+			continue
+		var d2 := global_position.distance_squared_to(v.global_position)
+		if d2 > r2:
+			continue
+		if d2 < best_d2:
+			best_d2 = d2
+			best = v
+	if best == null:
+		return false
+	enter_van(best)
+	return true
+
+
 func _try_pickup() -> void:
+	if _try_enter_van():
+		return
 	if _held_enemy != null and is_instance_valid(_held_enemy):
 		return
 	var collider := _raycast_aimed_throwable(pickup_distance)
