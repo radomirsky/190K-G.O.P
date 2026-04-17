@@ -193,6 +193,7 @@ var _death_layer: CanvasLayer = null
 var _death_panel: PanelContainer = null
 var _death_restart_btn: Button = null
 var _death_exit_btn: Button = null
+var _death_pause_btn: Button = null
 var _death_hint_label: Label = null
 var _death_visible: bool = false
 ## Первые секунды на экране смерти: нельзя нажимать кнопки и Esc (рестарт).
@@ -874,6 +875,8 @@ func _on_player_died() -> void:
 	# Останавливаем управление и врагов.
 	set_process(false)
 	set_physics_process(false)
+	# Пауза/Esc на экране смерти обрабатываются здесь, не в _process.
+	set_process_unhandled_input(true)
 	GameProgress.world_time_frozen = true
 	for node in get_tree().get_nodes_in_group("enemy"):
 		if node is CharacterBody3D:
@@ -931,6 +934,13 @@ func _ensure_death_ui() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(title)
 
+	var btn_pause := Button.new()
+	_death_pause_btn = btn_pause
+	btn_pause.text = "Пауза"
+	btn_pause.custom_minimum_size = Vector2(220, 36)
+	btn_pause.pressed.connect(_show_pause_menu)
+	v.add_child(btn_pause)
+
 	var hint := Label.new()
 	_death_hint_label = hint
 	hint.text = "Esc — заново\nИли выбери кнопку ниже"
@@ -979,7 +989,10 @@ func _apply_death_ui_lock_state() -> void:
 		_death_exit_btn.disabled = _death_ui_input_locked
 	if _death_hint_label:
 		if _death_ui_input_locked:
-			_death_hint_label.text = "Подождите %d сек…" % int(ceil(DEATH_UI_LOCK_SEC))
+			_death_hint_label.text = (
+				"Подождите %d сек…\nEsc или «Пауза» — полная пауза (в туалет и т.п.)"
+				% int(ceil(DEATH_UI_LOCK_SEC))
+			)
 		else:
 			_death_hint_label.text = "Esc — заново\nИли выбери кнопку ниже"
 
@@ -1106,12 +1119,15 @@ func _ensure_pause_ui() -> void:
 
 
 func _show_pause_menu() -> void:
-	if _death_visible or _dead_restart_in_progress:
-		return
 	if _shop_open:
+		return
+	if _pause_visible:
 		return
 	_ensure_pause_ui()
 	_pause_hide_controls()
+	if _pause_layer:
+		# Экран смерти (слой 200) — поднимаем паузу, иначе синий экран не виден.
+		_pause_layer.layer = 220 if _death_visible else 150
 	var tree := get_tree()
 	if tree:
 		tree.paused = true
@@ -1131,6 +1147,7 @@ func _hide_pause_menu() -> void:
 	_pause_visible = false
 	if _pause_layer:
 		_pause_layer.visible = false
+		_pause_layer.layer = 150
 	var tree := get_tree()
 	if tree:
 		tree.paused = false
@@ -1141,7 +1158,8 @@ func _hide_pause_menu() -> void:
 
 
 func _exit_game() -> void:
-	if _death_visible and _death_ui_input_locked:
+	# С экрана смерти нельзя выйти только в первые секунды; из меню паузы — можно.
+	if _death_visible and _death_ui_input_locked and not _pause_visible:
 		return
 	var tree := get_tree()
 	if tree:
@@ -1596,6 +1614,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") or esc:
 		if _death_visible:
 			if _death_ui_input_locked:
+				if not _pause_visible:
+					_show_pause_menu()
 				get_viewport().set_input_as_handled()
 				return
 			_restart_scene_after_death()
