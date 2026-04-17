@@ -191,7 +191,13 @@ var _fall_min_vy: float = 0.0
 var _dead_restart_in_progress: bool = false
 var _death_layer: CanvasLayer = null
 var _death_panel: PanelContainer = null
+var _death_restart_btn: Button = null
+var _death_exit_btn: Button = null
+var _death_hint_label: Label = null
 var _death_visible: bool = false
+## Первые секунды на экране смерти: нельзя нажимать кнопки и Esc (рестарт).
+var _death_ui_input_locked: bool = false
+const DEATH_UI_LOCK_SEC: float = 3.0
 var _pause_layer: CanvasLayer = null
 var _pause_overlay: Control = null
 var _pause_main_panel: Control = null
@@ -876,6 +882,8 @@ func _on_player_died() -> void:
 
 
 func _restart_scene_after_death() -> void:
+	if _death_visible and _death_ui_input_locked:
+		return
 	var tree := get_tree()
 	if tree == null:
 		return
@@ -924,6 +932,7 @@ func _ensure_death_ui() -> void:
 	v.add_child(title)
 
 	var hint := Label.new()
+	_death_hint_label = hint
 	hint.text = "Esc — заново\nИли выбери кнопку ниже"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(hint)
@@ -933,12 +942,14 @@ func _ensure_death_ui() -> void:
 	v.add_child(h)
 
 	var restart := Button.new()
+	_death_restart_btn = restart
 	restart.text = "Заново"
 	restart.custom_minimum_size = Vector2(180, 34)
 	restart.pressed.connect(_restart_scene_after_death)
 	h.add_child(restart)
 
 	var exitb := Button.new()
+	_death_exit_btn = exitb
 	exitb.text = "Выйти"
 	exitb.custom_minimum_size = Vector2(180, 34)
 	exitb.pressed.connect(_exit_game)
@@ -950,11 +961,36 @@ func _ensure_death_ui() -> void:
 func _show_death_screen() -> void:
 	_ensure_death_ui()
 	_death_visible = true
+	_death_ui_input_locked = true
+	_apply_death_ui_lock_state()
 	if _death_layer:
 		_death_layer.visible = true
+	var t := get_tree().create_timer(DEATH_UI_LOCK_SEC, true)
+	t.timeout.connect(_on_death_ui_lock_expired, CONNECT_ONE_SHOT)
 	# Отпускаем мышь для кнопок.
 	_want_mouse_captured = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _apply_death_ui_lock_state() -> void:
+	if _death_restart_btn:
+		_death_restart_btn.disabled = _death_ui_input_locked
+	if _death_exit_btn:
+		_death_exit_btn.disabled = _death_ui_input_locked
+	if _death_hint_label:
+		if _death_ui_input_locked:
+			_death_hint_label.text = "Подождите %d сек…" % int(ceil(DEATH_UI_LOCK_SEC))
+		else:
+			_death_hint_label.text = "Esc — заново\nИли выбери кнопку ниже"
+
+
+func _on_death_ui_lock_expired() -> void:
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
+	if not _death_visible:
+		return
+	_death_ui_input_locked = false
+	_apply_death_ui_lock_state()
 
 
 func _ensure_pause_ui() -> void:
@@ -1076,14 +1112,14 @@ func _show_pause_menu() -> void:
 		return
 	_ensure_pause_ui()
 	_pause_hide_controls()
+	var tree := get_tree()
+	if tree:
+		tree.paused = true
 	_pause_visible = true
 	if _pause_layer:
 		_pause_layer.visible = true
 	if _pause_overlay:
 		_pause_overlay.grab_focus()
-	var tree := get_tree()
-	if tree:
-		tree.paused = true
 	_want_mouse_captured = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -1105,6 +1141,8 @@ func _hide_pause_menu() -> void:
 
 
 func _exit_game() -> void:
+	if _death_visible and _death_ui_input_locked:
+		return
 	var tree := get_tree()
 	if tree:
 		tree.quit()
@@ -1557,6 +1595,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		esc = k.pressed and not k.echo and (k.keycode == KEY_ESCAPE or k.physical_keycode == KEY_ESCAPE)
 	if event.is_action_pressed("ui_cancel") or esc:
 		if _death_visible:
+			if _death_ui_input_locked:
+				get_viewport().set_input_as_handled()
+				return
 			_restart_scene_after_death()
 			get_viewport().set_input_as_handled()
 			return
