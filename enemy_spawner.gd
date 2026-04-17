@@ -6,8 +6,8 @@ extends Node3D
 @export var spawn_every_sec: float = 1.25
 @export var max_alive: int = 12
 
-@export var spawn_radius_min: float = 10.0
-@export var spawn_radius_max: float = 18.0
+@export var spawn_radius_min: float = 4.0
+@export var spawn_radius_max: float = 12.0
 @export var spawn_height: float = 1.25
 @export var snap_floor_ray_up: float = 10.0
 @export var snap_floor_ray_down: float = 50.0
@@ -48,7 +48,7 @@ func _on_boss_spawn_requested() -> void:
 	flat.y = 0.0
 	if flat.length_squared() < 0.001:
 		flat = Vector3(0.0, 0.0, -1.0)
-	flat = flat.normalized() * 16.0
+	flat = flat.normalized() * 11.0
 	var want := _player.global_position + flat + Vector3(0.0, spawn_height, 0.0)
 	var base := _snap_to_floor(want)
 	b.global_position = base + Vector3.UP * spawn_height
