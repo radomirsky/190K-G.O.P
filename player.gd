@@ -293,6 +293,9 @@ func _ready() -> void:
 		var cb := Callable(self, "_restore_mouse_capture_after_focus")
 		if not win.focus_entered.is_connected(cb):
 			win.focus_entered.connect(cb)
+		var cb_out := Callable(self, "_on_window_focus_exited")
+		if not win.focus_exited.is_connected(cb_out):
+			win.focus_exited.connect(cb_out)
 	call_deferred("_setup_aim_feedback")
 	call_deferred("_setup_hp_ui")
 	call_deferred("_setup_shop_ui")
@@ -322,6 +325,13 @@ func _exit_tree() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		call_deferred("_restore_mouse_capture_after_focus")
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		# Дублируем сигнал окна (на части сборок уведомление не доходит до игрока).
+		call_deferred("_on_application_focus_lost")
+
+
+func _on_window_focus_exited() -> void:
+	call_deferred("_on_application_focus_lost")
 
 
 func _restore_mouse_capture_after_focus() -> void:
@@ -334,6 +344,22 @@ func _restore_mouse_capture_after_focus() -> void:
 	if _want_mouse_captured:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_center_mouse_in_viewport()
+
+
+## Сворачивание окна / Alt+Tab: без этого игра шла дальше и можно «умереть в туалете».
+func _on_application_focus_lost() -> void:
+	if not is_inside_tree():
+		return
+	if get_tree() == null:
+		return
+	if _pause_visible:
+		return
+	if _death_visible:
+		return
+	if _shop_open:
+		_open_pause_menu_internal()
+		return
+	_show_pause_menu()
 
 
 func _center_mouse_in_viewport() -> void:
@@ -632,6 +658,7 @@ func _setup_shop_ui() -> void:
 		return
 	_shop_layer = CanvasLayer.new()
 	_shop_layer.layer = 105
+	_shop_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	_shop_layer.visible = false
 	add_child(_shop_layer)
 	var panel := PanelContainer.new()
@@ -899,6 +926,7 @@ func _ensure_death_ui() -> void:
 		return
 	_death_layer = CanvasLayer.new()
 	_death_layer.layer = 200
+	_death_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_death_layer)
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -938,7 +966,7 @@ func _ensure_death_ui() -> void:
 	_death_pause_btn = btn_pause
 	btn_pause.text = "Пауза"
 	btn_pause.custom_minimum_size = Vector2(220, 36)
-	btn_pause.pressed.connect(_show_pause_menu)
+	btn_pause.pressed.connect(_open_pause_menu_internal)
 	v.add_child(btn_pause)
 
 	var hint := Label.new()
@@ -1121,6 +1149,10 @@ func _ensure_pause_ui() -> void:
 func _show_pause_menu() -> void:
 	if _shop_open:
 		return
+	_open_pause_menu_internal()
+
+
+func _open_pause_menu_internal() -> void:
 	if _pause_visible:
 		return
 	_ensure_pause_ui()
