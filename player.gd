@@ -638,13 +638,16 @@ func _update_hp_ui() -> void:
 			_van_fuel_label.visible = true
 			var fr := float(_driving_van.call("get_fuel_ratio"))
 			var pct := int(round(fr * 100.0))
-			_van_fuel_label.text = "БЕНЗИН: %d%%   (пусто — заправка в лавке, %d МАМА)" % [
-				pct,
-				GameProgress.COST_VAN_REFUEL,
-			]
-			if fr <= 0.001:
+			var hp_pct := 100
+			if _driving_van.has_method("get_hull_ratio"):
+				hp_pct = int(round(float(_driving_van.call("get_hull_ratio")) * 100.0))
+			_van_fuel_label.text = (
+				"ФУРГОН: корпус %d%%   бензин %d%%   | заправка %d МАМА, сломан — %d МАМА"
+				% [hp_pct, pct, GameProgress.COST_VAN_REFUEL, GameProgress.COST_VAN_RESTORE]
+			)
+			if hp_pct <= 15 or fr <= 0.001:
 				_van_fuel_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.28, 1.0))
-			elif fr < 0.2:
+			elif hp_pct < 35 or fr < 0.2:
 				_van_fuel_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.35, 1.0))
 			else:
 				_van_fuel_label.add_theme_color_override("font_color", Color(0.75, 0.92, 1.0, 0.98))
@@ -670,7 +673,7 @@ func _setup_shop_ui() -> void:
 	panel.offset_left = -250.0
 	panel.offset_top = 72.0
 	panel.offset_right = 250.0
-	panel.offset_bottom = 628.0
+	panel.offset_bottom = 668.0
 	_shop_layer.add_child(panel)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -705,6 +708,7 @@ func _setup_shop_ui() -> void:
 		"animatron_blast",
 		"van_turrets",
 		"van_refuel",
+		"van_restore",
 	]:
 		var btn := Button.new()
 		btn.name = "Btn_" + key
@@ -801,11 +805,28 @@ func _refresh_shop_buttons() -> void:
 	)
 	_set_shop_btn_van_turrets()
 	_set_shop_btn_van_refuel()
+	_set_shop_btn_van_restore()
+
+
+func _set_shop_btn_van_restore() -> void:
+	var b := _shop_layer.find_child("Btn_van_restore", true, false) as Button
+	if b == null:
+		return
+	if not GameProgress.van_destroyed:
+		b.text = "Фургон: на ходу (восстановление не нужно)"
+		b.disabled = true
+	else:
+		b.text = "Фургон: восстановить после поломки   |   цена %d МАМА" % GameProgress.COST_VAN_RESTORE
+		b.disabled = GameProgress.mama_tokens < GameProgress.COST_VAN_RESTORE
 
 
 func _set_shop_btn_van_refuel() -> void:
 	var b := _shop_layer.find_child("Btn_van_refuel", true, false) as Button
 	if b == null:
+		return
+	if GameProgress.van_destroyed:
+		b.text = "Фургон: сломан — сначала восстановление (%d МАМА)" % GameProgress.COST_VAN_RESTORE
+		b.disabled = true
 		return
 	var fr := GameProgress.get_van_fuel_ratio_for_shop()
 	if fr >= 0.999:
@@ -872,6 +893,8 @@ func _on_shop_buy_pressed(which: String) -> void:
 			ok = GameProgress.try_buy_van_turrets()
 		"van_refuel":
 			ok = GameProgress.try_buy_van_refuel()
+		"van_restore":
+			ok = GameProgress.try_buy_van_restore()
 	if ok:
 		_clamp_gun_ammo_to_effective()
 	_refresh_shop_buttons()
@@ -3312,6 +3335,8 @@ func _apply_body_pushes(move_velocity: Vector3) -> void:
 func enter_van(van: Node3D) -> void:
 	if van == null or not is_instance_valid(van) or not van.has_method("set_driver"):
 		return
+	if van.has_method("is_van_operable") and not bool(van.call("is_van_operable")):
+		return
 	if _driving_van != null:
 		return
 	if van.has_method("has_driver") and bool(van.call("has_driver")):
@@ -3378,6 +3403,8 @@ func _try_enter_van() -> bool:
 		if not n is Node3D:
 			continue
 		var v := n as Node3D
+		if v.has_method("is_van_operable") and not bool(v.call("is_van_operable")):
+			continue
 		if v.has_method("has_driver") and bool(v.call("has_driver")):
 			continue
 		var d2 := global_position.distance_squared_to(v.global_position)

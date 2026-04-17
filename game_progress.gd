@@ -22,6 +22,7 @@ const COST_KATANA_DMG := 5
 const COST_KATANA_SPEED := 5
 const COST_VAN_TURRETS := 10
 const COST_VAN_REFUEL := 5
+const COST_VAN_RESTORE := 20
 const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
@@ -44,6 +45,8 @@ var up_katana_dmg: int = 0
 var up_katana_speed: int = 0
 ## Одноразовая покупка: бомбомёт + скорострел на управляемом фургоне.
 var van_turrets_installed: bool = false
+## Фургон уничтожен (0 HP) — снова завести только за МАМА в лавке.
+var van_destroyed: bool = false
 
 
 func on_regular_enemy_died(world_pos: Vector3) -> void:
@@ -202,6 +205,8 @@ func try_buy_van_turrets() -> bool:
 
 
 func get_van_fuel_ratio_for_shop() -> float:
+	if van_destroyed:
+		return 1.0
 	var tree := get_tree()
 	if tree == null:
 		return 1.0
@@ -212,6 +217,8 @@ func get_van_fuel_ratio_for_shop() -> float:
 
 
 func try_buy_van_refuel() -> bool:
+	if van_destroyed:
+		return false
 	var tree := get_tree()
 	if tree == null:
 		return false
@@ -230,6 +237,21 @@ func try_buy_van_refuel() -> bool:
 	for n in vans:
 		if n.has_method("refuel_full"):
 			n.call("refuel_full")
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_van_restore() -> bool:
+	if not van_destroyed:
+		return false
+	if not spend_mama(COST_VAN_RESTORE):
+		return false
+	van_destroyed = false
+	var tree := get_tree()
+	if tree != null:
+		for n in tree.get_nodes_in_group("drivable_van"):
+			if n.has_method("restore_van_after_purchase"):
+				n.call("restore_van_after_purchase")
 	upgrades_changed.emit()
 	return true
 
