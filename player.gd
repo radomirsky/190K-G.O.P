@@ -1719,6 +1719,13 @@ func _input(event: InputEvent) -> void:
 					_grapple_try_melee()
 					get_viewport().set_input_as_handled()
 					return
+			if _held_enemy != null and is_instance_valid(_held_enemy):
+				if event.pressed:
+					_throw_press_usec = Time.get_ticks_usec()
+				elif _throw_press_usec >= 0:
+					_throw_held_charged()
+				get_viewport().set_input_as_handled()
+				return
 			if _equipped == EquippedGun.PYRAMID and _gun_cd <= 0.0 and _gun_ammo > 0:
 				_cancel_gun_finish_reload_anim()
 				_fire_gun_pyramid()
@@ -1760,6 +1767,12 @@ func _input(event: InputEvent) -> void:
 				_throw_press_usec = Time.get_ticks_usec()
 		else:
 			if _held and _throw_press_usec >= 0:
+				_throw_held_charged()
+			elif (
+				_held_enemy != null
+				and is_instance_valid(_held_enemy)
+				and _throw_press_usec >= 0
+			):
 				_throw_held_charged()
 
 
@@ -1813,7 +1826,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			(event.keycode == KEY_1 or event.physical_keycode == KEY_1)
 			and _world_actions_input_ok()
 		):
-			_equipped = EquippedGun.ANIMATRON
+			if _equipped == EquippedGun.ANIMATRON:
+				_equipped = EquippedGun.NONE
+			else:
+				_equipped = EquippedGun.ANIMATRON
 			_update_weapon_visibility()
 			_update_hp_ui()
 			get_viewport().set_input_as_handled()
@@ -1821,7 +1837,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			(event.keycode == KEY_2 or event.physical_keycode == KEY_2)
 			and _world_actions_input_ok()
 		):
-			_equipped = EquippedGun.SAWED_OFF
+			if _equipped == EquippedGun.SAWED_OFF:
+				_equipped = EquippedGun.NONE
+			else:
+				_equipped = EquippedGun.SAWED_OFF
 			_update_weapon_visibility()
 			_update_hp_ui()
 			get_viewport().set_input_as_handled()
@@ -1829,7 +1848,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			(event.keycode == KEY_3 or event.physical_keycode == KEY_3)
 			and _world_actions_input_ok()
 		):
-			_equipped = EquippedGun.PYRAMID
+			if _equipped == EquippedGun.PYRAMID:
+				_equipped = EquippedGun.NONE
+			else:
+				_equipped = EquippedGun.PYRAMID
 			_update_weapon_visibility()
 			_update_hp_ui()
 			get_viewport().set_input_as_handled()
@@ -1837,7 +1859,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			(event.keycode == KEY_4 or event.physical_keycode == KEY_4)
 			and _world_actions_input_ok()
 		):
-			_equipped = EquippedGun.STASIS
+			if _equipped == EquippedGun.STASIS:
+				_equipped = EquippedGun.NONE
+			else:
+				_equipped = EquippedGun.STASIS
 			_update_weapon_visibility()
 			_update_hp_ui()
 			get_viewport().set_input_as_handled()
@@ -1979,6 +2004,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _driving_van != null and is_instance_valid(_driving_van):
 				exit_van()
 			elif _held:
+				_throw_held_tap()
+			elif _held_enemy != null and is_instance_valid(_held_enemy):
 				_throw_held_tap()
 			else:
 				_try_pickup()
@@ -3152,9 +3179,46 @@ func _throw_dynamite() -> void:
 	dyn.global_position = spawn_pos
 	dyn.linear_velocity = dir * 15.0
 	dyn.angular_velocity = Vector3(randf_range(-4.0, 4.0), randf_range(-4.0, 4.0), randf_range(-4.0, 4.0))
+	_spawn_dynamite_throw_fire_fx(spawn_pos)
 	GameProgress.dynamite_stock -= 1
 	GameProgress.upgrades_changed.emit()
 	_update_hp_ui()
+
+
+func _spawn_dynamite_throw_fire_fx(at: Vector3) -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var root := Node3D.new()
+	root.name = "DynamiteThrowFireFx"
+	scene.add_child(root)
+	root.global_position = at
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.42, 0.12)
+	light.light_energy = 2.2
+	light.omni_range = 4.2
+	light.shadow_enabled = false
+	root.add_child(light)
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.28
+	sm.height = sm.radius * 2.0
+	sm.radial_segments = 10
+	mi.mesh = sm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.38, 0.08, 0.5)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.48, 0.1)
+	mat.emission_energy_multiplier = 2.8
+	mi.set_surface_override_material(0, mat)
+	root.add_child(mi)
+	var timer := Timer.new()
+	timer.wait_time = 5.0
+	timer.one_shot = true
+	root.add_child(timer)
+	timer.timeout.connect(root.queue_free)
+	timer.start()
 
 
 func _spawn_throwable_pyramid() -> void:
