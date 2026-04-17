@@ -529,7 +529,28 @@ func take_truck_hit(damage: int) -> void:
 		return
 	if damage < 1:
 		damage = 1
-	_take_hit(damage)
+	if is_boss:
+		_take_hit(damage)
+		return
+	# Обычный враг — наезд грузовика сразу убивает (без окна неуязвимости).
+	_take_stasis_hit(_hp)
+
+
+## Скорострел с фургона: без окна неуязвимости, как стазис.
+func take_van_minigun_hit(damage: int) -> void:
+	if _dead:
+		return
+	if damage < 1:
+		damage = 1
+	_take_stasis_hit(damage)
+
+
+func take_dynamite_explosion(damage: int) -> void:
+	if _dead:
+		return
+	if damage < 1:
+		damage = 1
+	_take_stasis_hit(damage)
 
 
 func _take_hit(amount: int = 1) -> void:

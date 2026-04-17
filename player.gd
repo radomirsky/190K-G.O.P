@@ -694,7 +694,7 @@ func _setup_shop_ui() -> void:
 	panel.offset_left = -250.0
 	panel.offset_top = 72.0
 	panel.offset_right = 250.0
-	panel.offset_bottom = 708.0
+	panel.offset_bottom = 620.0
 	_shop_layer.add_child(panel)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -703,17 +703,29 @@ func _setup_shop_ui() -> void:
 	margin.add_theme_constant_override("margin_top", 12)
 	margin.add_theme_constant_override("margin_bottom", 12)
 	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(vbox)
+	var outer := VBoxContainer.new()
+	outer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_theme_constant_override("separation", 8)
+	margin.add_child(outer)
 	var title := Label.new()
 	title.name = "ShopTitle"
 	title.text = "МАГАЗИН — валюта: жетоны МАМА (M / киоск на краю, Esc — закрыть)"
-	vbox.add_child(title)
+	outer.add_child(title)
 	var info := Label.new()
 	info.name = "ShopInfo"
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(info)
+	outer.add_child(info)
+	var scroll := ScrollContainer.new()
+	scroll.name = "ShopScroll"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	outer.add_child(scroll)
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 8)
+	scroll.add_child(vbox)
 	for key in [
 		"pyramid_mag",
 		"pyramid_reload",

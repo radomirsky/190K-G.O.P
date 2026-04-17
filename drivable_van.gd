@@ -7,6 +7,8 @@ extends CharacterBody3D
 @export var turn_speed: float = 2.35
 @export var enemy_damage_min: int = 8
 @export var enemy_damage_max: int = 72
+## Гориз. скорость выше этого — наезд наносит урон (ниже порога «толчки» не бьют).
+@export var enemy_ram_min_speed: float = 0.45
 @export var enemy_hit_cooldown_sec: float = 0.28
 @export var fuel_max: float = 100.0
 @export var fuel_drain_idle: float = 0.38
@@ -200,7 +202,6 @@ func _physics_process(delta: float) -> void:
 			turn -= 1.0
 		rotate_y(turn * turn_speed * delta)
 		move_and_slide()
-		_resolve_enemy_hits()
 		var hspd := Vector3(velocity.x, 0.0, velocity.z).length()
 		var drain := fuel_drain_idle
 		if hspd > 0.35 or Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_S):
@@ -211,6 +212,7 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, 0.0, brake * delta)
 		move_and_slide()
 
+	_resolve_enemy_hits()
 	_resolve_van_damage_from_enemy_contacts()
 
 
@@ -236,7 +238,7 @@ func _hull_hurt_cd_decay(delta: float) -> void:
 
 func _resolve_enemy_hits() -> void:
 	var hspd := Vector3(velocity.x, 0.0, velocity.z).length()
-	if hspd < 1.8:
+	if hspd < enemy_ram_min_speed:
 		return
 	for i in get_slide_collision_count():
 		var col := get_slide_collision(i)
