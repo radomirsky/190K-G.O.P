@@ -7,6 +7,7 @@ enum ViewMode { FIRST, SECOND, THIRD }
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
 const THROWABLE_STASIS_RING_SCENE := preload("res://throwable_stasis_ring.tscn")
+const DYNAMITE_SCENE := preload("res://dynamite.tscn")
 const ANIMATRON_BLACKHOLE_SCENE := preload("res://animatron_blackhole.tscn")
 const PAUSE_MENU_OVERLAY := preload("res://pause_menu_overlay.gd")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
@@ -232,6 +233,10 @@ var _van_saved_layer: int = 1
 var _van_saved_mask: int = 1
 
 
+func _is_driving_van() -> bool:
+	return _driving_van != null and is_instance_valid(_driving_van)
+
+
 func _eff_gun_mag() -> int:
 	return gun_mag_size + GameProgress.up_pyramid_mag * 2
 
@@ -402,6 +407,12 @@ func _process(_delta: float) -> void:
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
 	_update_hp_ui()
+
+	if _is_driving_van():
+		if _camera:
+			var fk_v := 1.0 - exp(-stasis_aim_fov_smooth * _delta)
+			_camera.fov = lerpf(_camera.fov, camera_fov, fk_v)
+		return
 
 	var want_stasis_aim := false
 	if _camera and _equipped == EquippedGun.STASIS:
@@ -575,7 +586,12 @@ func _update_hp_ui() -> void:
 	if _hp_label:
 		_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
 	if _gun_label:
-		if _equipped == EquippedGun.PYRAMID:
+		if _is_driving_van():
+			if GameProgress.van_turrets_installed and not GameProgress.van_destroyed:
+				_gun_label.text = "ФУРГОН: без оружия — ЛКМ скорострел, ПКМ бомба"
+			else:
+				_gun_label.text = "ФУРГОН: без оружия (купите турели в лавке)"
+		elif _equipped == EquippedGun.PYRAMID:
 			var gm := _eff_gun_mag()
 			if _gun_refill_wait > 0.0:
 				_gun_label.text = "GUN: %d/%d  перезарядка %.1fs  [R]" % [_gun_ammo, gm, _gun_refill_wait]
@@ -627,8 +643,9 @@ func _update_hp_ui() -> void:
 	if _mama_hud:
 		var r := GameProgress.regular_kills % GameProgress.KILLS_FOR_BOSS
 		var until_boss := GameProgress.KILLS_FOR_BOSS - r if r != 0 else GameProgress.KILLS_FOR_BOSS
-		_mama_hud.text = "МАМА: %d   Убийств: %d (босс каждые %d; до след.: %d)" % [
+		_mama_hud.text = "МАМА: %d   Динамит: %d   Убийств: %d (босс каждые %d; до след.: %d)" % [
 			GameProgress.mama_tokens,
+			GameProgress.dynamite_stock,
 			GameProgress.regular_kills,
 			GameProgress.KILLS_FOR_BOSS,
 			until_boss,
@@ -641,9 +658,13 @@ func _update_hp_ui() -> void:
 			var hp_pct := 100
 			if _driving_van.has_method("get_hull_ratio"):
 				hp_pct = int(round(float(_driving_van.call("get_hull_ratio")) * 100.0))
+			var tur_hint := ""
+			if GameProgress.van_turrets_installed and not GameProgress.van_destroyed:
+				tur_hint = "   | ЛКМ турель / ПКМ турель"
 			_van_fuel_label.text = (
 				"ФУРГОН: корпус %d%%   бензин %d%%   | заправка %d МАМА, сломан — %d МАМА"
 				% [hp_pct, pct, GameProgress.COST_VAN_REFUEL, GameProgress.COST_VAN_RESTORE]
+				+ tur_hint
 			)
 			if hp_pct <= 15 or fr <= 0.001:
 				_van_fuel_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.28, 1.0))
@@ -673,7 +694,7 @@ func _setup_shop_ui() -> void:
 	panel.offset_left = -250.0
 	panel.offset_top = 72.0
 	panel.offset_right = 250.0
-	panel.offset_bottom = 668.0
+	panel.offset_bottom = 708.0
 	_shop_layer.add_child(panel)
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -698,6 +719,7 @@ func _setup_shop_ui() -> void:
 		"pyramid_reload",
 		"stasis_dmg",
 		"sawed_pellets",
+		"dynamite",
 		"grapple_range",
 		"grapple_pull",
 		"grapple_damage",
@@ -806,6 +828,15 @@ func _refresh_shop_buttons() -> void:
 	_set_shop_btn_van_turrets()
 	_set_shop_btn_van_refuel()
 	_set_shop_btn_van_restore()
+	_set_shop_btn_dynamite()
+
+
+func _set_shop_btn_dynamite() -> void:
+	var b := _shop_layer.find_child("Btn_dynamite", true, false) as Button
+	if b == null:
+		return
+	b.text = "Динамит: +1 шт. (бросок клав. 6, слабый взрыв)   |   цена %d МАМА" % GameProgress.COST_DYNAMITE
+	b.disabled = GameProgress.mama_tokens < GameProgress.COST_DYNAMITE
 
 
 func _set_shop_btn_van_restore() -> void:
@@ -895,6 +926,8 @@ func _on_shop_buy_pressed(which: String) -> void:
 			ok = GameProgress.try_buy_van_refuel()
 		"van_restore":
 			ok = GameProgress.try_buy_van_restore()
+		"dynamite":
+			ok = GameProgress.try_buy_dynamite()
 	if ok:
 		_clamp_gun_ammo_to_effective()
 	_refresh_shop_buttons()
@@ -1295,11 +1328,13 @@ func _pause_controls_help_text() -> String:
 		+ "ЛКМ — выстрел / удар катаной / верёвка / метание\n"
 		+ "ПКМ — парирование (катана) или крюк-верёвка\n"
 		+ "СКМ — рывок катаны: урон по прицелу, перезарядка 10 сек\n"
+		+ "В фургоне: оружие недоступно; турели — ЛКМ (скорострел) и ПКМ (бомба), если куплены в лавке\n"
 		+ "E — сесть в фургон / выйти; подобрать / метнуть; Shift+E — увеличить куб / отпустить\n"
 		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
 		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
 		+ "H — обрез; M — магазин\n"
+		+ "6 — бросить динамит (покупается в лавке за МАМА)\n"
 		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
 		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
 		+ "Esc — пауза\n"
@@ -1568,6 +1603,23 @@ func _cycle_weapon(step: int) -> void:
 func _input(event: InputEvent) -> void:
 	if _pause_visible:
 		return
+	if _is_driving_van():
+		if event is InputEventMouseMotion:
+			if not _shop_open and not _pause_visible:
+				var mm0 := Input.mouse_mode
+				if (
+					mm0 == Input.MOUSE_MODE_CAPTURED
+					or mm0 == Input.MOUSE_MODE_VISIBLE
+					or mm0 == Input.MOUSE_MODE_CONFINED
+				):
+					_look_yaw_target -= event.relative.x * mouse_sensitivity
+					_look_pitch_target = _clamp_pitch_target(
+						_look_pitch_target - event.relative.y * mouse_sensitivity
+					)
+		elif event is InputEventMouseButton:
+			if not _shop_open and not _pause_visible:
+				get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		if _grapple_state != GrappleState.INACTIVE:
 			_clear_grapple()
@@ -1727,6 +1779,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:
+		if _is_driving_van():
+			if event.keycode == KEY_M and _world_actions_input_ok():
+				_toggle_shop()
+				get_viewport().set_input_as_handled()
+				return
+			if (
+				_is_use_key(event)
+				and not (event.shift_pressed or Input.is_key_pressed(KEY_SHIFT))
+				and _world_actions_input_ok()
+			):
+				exit_van()
+				get_viewport().set_input_as_handled()
+				return
+			get_viewport().set_input_as_handled()
+			return
 		if event.keycode == KEY_SHIFT and event.location == KEY_LOCATION_LEFT:
 			_try_dash()
 			get_viewport().set_input_as_handled()
@@ -1766,9 +1833,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			(event.keycode == KEY_5 or event.physical_keycode == KEY_5)
 			and _world_actions_input_ok()
 		):
-			_equipped = EquippedGun.KATANA
+			if _equipped == EquippedGun.KATANA:
+				_equipped = EquippedGun.NONE
+			else:
+				_equipped = EquippedGun.KATANA
 			_update_weapon_visibility()
 			_update_hp_ui()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_6 or event.physical_keycode == KEY_6)
+			and _world_actions_input_ok()
+			and not _is_driving_van()
+		):
+			_throw_dynamite()
 			get_viewport().set_input_as_handled()
 		if (
 			(event.keycode == KEY_C or event.physical_keycode == KEY_C)
@@ -1981,6 +2058,18 @@ func _update_weapon_visibility() -> void:
 	_ensure_sawed_nodes()
 	_ensure_animatron_nodes()
 	_ensure_katana_nodes()
+	if _is_driving_van():
+		if _gun_node:
+			_gun_node.visible = false
+		if _stasis_node:
+			_stasis_node.visible = false
+		if _sawed_node:
+			_sawed_node.visible = false
+		if _animatron_node:
+			_animatron_node.visible = false
+		if _katana_node:
+			_katana_node.visible = false
+		return
 	if _gun_node:
 		_gun_node.visible = (_equipped == EquippedGun.PYRAMID)
 	if _stasis_node:
@@ -2514,8 +2603,33 @@ func _animatron_aim_dir() -> Vector3:
 		return ((best.global_position + Vector3(0.0, 2.0, 0.0)) - from).normalized()
 	return fwd
 
+
+func _apply_camera_look_smoothing(delta: float) -> void:
+	var lk := look_key_speed * delta
+	if Input.is_key_pressed(KEY_LEFT):
+		_look_yaw_target += lk
+	if Input.is_key_pressed(KEY_RIGHT):
+		_look_yaw_target -= lk
+	if Input.is_key_pressed(KEY_UP):
+		_look_pitch_target = _clamp_pitch_target(_look_pitch_target + lk)
+	if Input.is_key_pressed(KEY_DOWN):
+		_look_pitch_target = _clamp_pitch_target(_look_pitch_target - lk)
+
+	var smooth_k := 1.0
+	if look_smoothing > 0.0:
+		smooth_k = 1.0 - exp(-look_smoothing * delta)
+	rotation.y = lerp_angle(rotation.y, _look_yaw_target, smooth_k)
+	_camera_pivot.rotation.x = lerpf(
+		_camera_pivot.rotation.x,
+		_look_pitch_target,
+		smooth_k
+	)
+	_clamp_camera_pitch()
+
+
 func _physics_process(delta: float) -> void:
 	if _driving_van != null and is_instance_valid(_driving_van):
+		_apply_camera_look_smoothing(delta)
 		return
 	var on_floor_before := is_on_floor()
 	if not is_on_floor():
@@ -2586,26 +2700,7 @@ func _physics_process(delta: float) -> void:
 		_clear_grapple()
 	_apply_body_pushes(move_vel)
 
-	var lk := look_key_speed * delta
-	if Input.is_key_pressed(KEY_LEFT):
-		_look_yaw_target += lk
-	if Input.is_key_pressed(KEY_RIGHT):
-		_look_yaw_target -= lk
-	if Input.is_key_pressed(KEY_UP):
-		_look_pitch_target = _clamp_pitch_target(_look_pitch_target + lk)
-	if Input.is_key_pressed(KEY_DOWN):
-		_look_pitch_target = _clamp_pitch_target(_look_pitch_target - lk)
-
-	var smooth_k := 1.0
-	if look_smoothing > 0.0:
-		smooth_k = 1.0 - exp(-look_smoothing * delta)
-	rotation.y = lerp_angle(rotation.y, _look_yaw_target, smooth_k)
-	_camera_pivot.rotation.x = lerpf(
-		_camera_pivot.rotation.x,
-		_look_pitch_target,
-		smooth_k
-	)
-	_clamp_camera_pitch()
+	_apply_camera_look_smoothing(delta)
 
 	if _held:
 		_held.global_position = _hold_point.global_position
@@ -3028,6 +3123,28 @@ func _on_last_spawned_cube_exiting(cube: RigidBody3D) -> void:
 		_last_player_spawned_cube = null
 
 
+func _throw_dynamite() -> void:
+	if _is_driving_van():
+		return
+	if GameProgress.dynamite_stock <= 0:
+		return
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var dyn := DYNAMITE_SCENE.instantiate() as RigidBody3D
+	if dyn == null:
+		return
+	var dir := _throw_aim_dir()
+	var spawn_pos := global_position + Vector3(0.0, 1.15, 0.0) + dir * 0.65
+	scene.add_child(dyn)
+	dyn.global_position = spawn_pos
+	dyn.linear_velocity = dir * 15.0
+	dyn.angular_velocity = Vector3(randf_range(-4.0, 4.0), randf_range(-4.0, 4.0), randf_range(-4.0, 4.0))
+	GameProgress.dynamite_stock -= 1
+	GameProgress.upgrades_changed.emit()
+	_update_hp_ui()
+
+
 func _spawn_throwable_pyramid() -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
@@ -3353,6 +3470,8 @@ func enter_van(van: Node3D) -> void:
 	position = Vector3(0.0, 0.72, 0.35)
 	rotation = Vector3.ZERO
 	van.call("set_driver", self)
+	_update_weapon_visibility()
+	_update_hp_ui()
 
 
 func exit_van() -> void:
@@ -3389,6 +3508,8 @@ func exit_van() -> void:
 	rotation = Vector3.ZERO
 	collision_layer = _van_saved_layer
 	collision_mask = _van_saved_mask
+	_update_weapon_visibility()
+	_update_hp_ui()
 
 
 func _try_enter_van() -> bool:
