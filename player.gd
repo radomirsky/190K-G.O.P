@@ -2473,9 +2473,19 @@ func _fire_creative_wand() -> void:
 			(n as GameEnemy).creative_wand_kill()
 		elif n.has_method("creative_wand_kill"):
 			n.call("creative_wand_kill")
+	var mobs: Array[Node] = []
+	for n2 in tree.get_nodes_in_group("village_katana_mob"):
+		if n2 is Node:
+			mobs.append(n2 as Node)
+	for n in mobs:
+		if not is_instance_valid(n):
+			continue
+		if n.has_method("creative_wand_kill"):
+			n.call("creative_wand_kill")
 	GameProgress.add_mama(GameProgress.CREATIVE_WAND_MAMA_GRANT)
 	notify_quest_banner(
-		"Креативная палочка: враги сняты. +%d МАМА." % GameProgress.CREATIVE_WAND_MAMA_GRANT
+		"Креативная палочка: враги и разъярённые жители сняты. +%d МАМА."
+		% GameProgress.CREATIVE_WAND_MAMA_GRANT
 	)
 	_update_hp_ui()
 

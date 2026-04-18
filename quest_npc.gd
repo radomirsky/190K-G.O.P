@@ -160,6 +160,13 @@ func take_katana_hit(damage: int) -> void:
 		_die()
 
 
+## Режим креатива: только разъярённый житель-моб.
+func creative_wand_kill() -> void:
+	if _dead or not _angry:
+		return
+	_die()
+
+
 func _die() -> void:
 	if _dead:
 		return
