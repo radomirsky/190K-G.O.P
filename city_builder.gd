@@ -1,15 +1,20 @@
 extends Node3D
-## Квартал с домиками и тремя жителями (квесты — CityQuests).
+## Город севернее особняка (не на паркете): дома, площадь, проход с головоломкой (плита + рычаг + ворота).
 
 const QUEST_NPC_SCENE := preload("res://quest_npc.tscn")
+const PLATE_SCENE := preload("res://puzzle_pressure_plate.tscn")
+const LEVER_SCENE := preload("res://puzzle_lever.tscn")
+const GATE_SCENE := preload("res://puzzle_gate_door.tscn")
 
-@export var grid_origin: Vector3 = Vector3(-40.0, 0.0, -34.0)
+## Левый нижний угол сетки домов (мир): вся сетка севернее особняка (z < ~-22).
+@export var grid_origin: Vector3 = Vector3(44.0, 0.0, -80.0)
 @export var cell_size: float = 9.5
 @export var grid_w: int = 5
-@export var grid_h: int = 5
+@export var grid_h: int = 6
 
 
 func _ready() -> void:
+	_build_north_passage_and_puzzle()
 	_build_plaza_and_houses()
 	_spawn_quest_npcs()
 
@@ -53,6 +58,30 @@ func _add_box_static(name: String, pos: Vector3, size: Vector3, mat: Material) -
 	body.add_child(sh)
 
 
+func _build_north_passage_and_puzzle() -> void:
+	var mat := _plaza_mat()
+	# Дорога от двора особняка к воротам.
+	_add_box_static("CityRoadSouth", Vector3(14.0, 0.08, -18.0), Vector3(32.0, 0.18, 16.0), mat)
+	_add_box_static("CityRoadNorth", Vector3(46.0, 0.08, -36.0), Vector3(48.0, 0.18, 28.0), mat)
+
+	var plate := PLATE_SCENE.instantiate() as Area3D
+	if plate:
+		plate.flag_key = "suburbs_plate"
+		add_child(plate)
+		plate.global_position = Vector3(22.0, 0.12, -19.0)
+
+	var gate := GATE_SCENE.instantiate() as StaticBody3D
+	if gate:
+		add_child(gate)
+		gate.global_position = Vector3(36.5, 0.0, -30.0)
+
+	var lever := LEVER_SCENE.instantiate() as StaticBody3D
+	if lever:
+		lever.flag_key = "suburbs_lever"
+		add_child(lever)
+		lever.global_position = Vector3(52.0, 0.05, -28.0)
+
+
 func _build_plaza_and_houses() -> void:
 	var total_x := float(grid_w) * cell_size
 	var total_z := float(grid_h) * cell_size
@@ -88,9 +117,9 @@ func _spawn_quest_npcs() -> void:
 	var total_z := float(grid_h) * cell_size
 	var mid := grid_origin + Vector3(total_x * 0.5, 0.0, total_z * 0.5)
 	var offsets: Array[Vector3] = [
-		Vector3(-2.2, 0.05, -1.0),
-		Vector3(1.8, 0.05, 0.6),
-		Vector3(0.2, 0.05, 2.4),
+		Vector3(-2.4, 0.05, -1.2),
+		Vector3(1.9, 0.05, 0.5),
+		Vector3(0.3, 0.05, 2.5),
 	]
 	for i in range(mini(3, offsets.size())):
 		var npc := QUEST_NPC_SCENE.instantiate() as StaticBody3D

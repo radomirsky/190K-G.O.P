@@ -6,8 +6,8 @@ extends Node3D
 @export var spawn_every_sec: float = 1.25
 @export var max_alive: int = 12
 
-@export var spawn_radius_min: float = 4.0
-@export var spawn_radius_max: float = 12.0
+@export var spawn_radius_min: float = 5.0
+@export var spawn_radius_max: float = 44.0
 @export var spawn_height: float = 1.25
 @export var snap_floor_ray_up: float = 10.0
 @export var snap_floor_ray_down: float = 50.0

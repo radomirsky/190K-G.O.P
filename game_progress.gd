@@ -23,6 +23,7 @@ const COST_KATANA_SPEED := 5
 const COST_VAN_TURRETS := 10
 const COST_VAN_REFUEL := 5
 const COST_VAN_RESTORE := 20
+const COST_DYNAMITE := 5
 const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
@@ -47,6 +48,19 @@ var up_katana_speed: int = 0
 var van_turrets_installed: bool = false
 ## Фургон уничтожен (0 HP) — снова завести только за МАМА в лавке.
 var van_destroyed: bool = false
+## Купленный в лавке динамит (бросок клав. 6).
+var dynamite_stock: int = 0
+## Флаги головоломок (плиты, рычаги, ворота) — ключ → true.
+var puzzle_flags: Dictionary = {}
+
+
+func set_puzzle_flag(key: String, value: bool = true) -> void:
+	puzzle_flags[key] = value
+	upgrades_changed.emit()
+
+
+func has_puzzle_flag(key: String) -> bool:
+	return bool(puzzle_flags.get(key, false))
 
 
 func on_regular_enemy_died(world_pos: Vector3) -> void:
@@ -252,6 +266,14 @@ func try_buy_van_restore() -> bool:
 		for n in tree.get_nodes_in_group("drivable_van"):
 			if n.has_method("restore_van_after_purchase"):
 				n.call("restore_van_after_purchase")
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_dynamite() -> bool:
+	if not spend_mama(COST_DYNAMITE):
+		return false
+	dynamite_stock += 1
 	upgrades_changed.emit()
 	return true
 

@@ -2036,6 +2036,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _is_use_key(event):
 			if _driving_van != null and is_instance_valid(_driving_van):
 				exit_van()
+			elif _try_interact_puzzle_lever():
+				pass
 			elif _try_interact_quest_npc():
 				pass
 			elif _held:
@@ -3473,6 +3475,50 @@ func _try_interact_quest_npc() -> bool:
 		return false
 	if npc.has_method("interact"):
 		npc.call("interact", self)
+		return true
+	return false
+
+
+func _raycast_aimed_puzzle_lever(max_dist: float) -> Node:
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var space := get_world_3d().direct_space_state
+	var to := from + dir * max_dist
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.hit_from_inside = true
+	var excl: Array[RID] = [get_rid()]
+	if _held != null and is_instance_valid(_held):
+		excl.append(_held.get_rid())
+	query.exclude = excl
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty() or not hit.has("collider"):
+		return null
+	var col: Object = hit["collider"]
+	if not col is Node:
+		return null
+	var n := col as Node
+	while n != null:
+		if n.is_in_group("puzzle_lever"):
+			return n
+		n = n.get_parent()
+	return null
+
+
+func _try_interact_puzzle_lever() -> bool:
+	if not _world_actions_input_ok():
+		return false
+	if _shop_open or _pause_visible:
+		return false
+	if _is_driving_van():
+		return false
+	var lev := _raycast_aimed_puzzle_lever(3.8)
+	if lev == null:
+		return false
+	if lev.has_method("interact"):
+		lev.call("interact", self)
 		return true
 	return false
 

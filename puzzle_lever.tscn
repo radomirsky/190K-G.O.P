@@ -1,0 +1,46 @@
+[gd_scene load_steps=6 format=3 uid="uid://puzzlelever01"]
+
+[ext_resource type="Script" path="res://puzzle_lever.gd" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_post"]
+size = Vector3(0.35, 1.15, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_post"]
+size = Vector3(0.32, 1.1, 0.32)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_handle"]
+top_radius = 0.08
+bottom_radius = 0.08
+height = 0.85
+radial_segments = 8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_metal"]
+albedo_color = Color(0.55, 0.52, 0.48, 1)
+metallic = 0.55
+roughness = 0.42
+
+[node name="PuzzleLever" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, 0)
+shape = SubResource("BoxShape3D_post")
+
+[node name="Post" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+mesh = SubResource("BoxMesh_post")
+surface_material_override/0 = SubResource("StandardMaterial3D_metal")
+
+[node name="Handle" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0.42, 0.95, 0)
+mesh = SubResource("CylinderMesh_handle")
+surface_material_override/0 = SubResource("StandardMaterial3D_metal")
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.55, 0)
+billboard = 1
+font_size = 20
+outline_size = 6
+text = "Рычаг — E"
