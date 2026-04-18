@@ -140,10 +140,13 @@ func robbery_triggers_villager_mob(door_node: Node3D, player: Node, door_village
 	if player is Node3D:
 		pts.append((player as Node3D).global_position)
 	var lim2 := ROBBERY_WITNESS_RADIUS_FOR_MOB * ROBBERY_WITNESS_RADIUS_FOR_MOB
-	for n in tree.get_nodes_in_group("talkable_npc"):
+	for n in tree.get_nodes_in_group("quest_npc"):
 		if not n is Node3D:
 			continue
-		if int(n.get("village_id")) != door_village_id:
+		var vid_var: Variant = n.get("village_id")
+		if vid_var == null:
+			continue
+		if int(vid_var) != door_village_id:
 			continue
 		var pg: Vector3 = (n as Node3D).global_position
 		for pt in pts:
@@ -157,8 +160,10 @@ func alert_all_villagers_katana_mob(only_village_id: int = -1) -> void:
 	if tree == null:
 		return
 	for n in tree.get_nodes_in_group("quest_npc"):
-		if only_village_id >= 0 and int(n.get("village_id")) != only_village_id:
-			continue
+		if only_village_id >= 0:
+			var vid2: Variant = n.get("village_id")
+			if vid2 == null or int(vid2) != only_village_id:
+				continue
 		if n.has_method("activate_katana_mob"):
 			n.call("activate_katana_mob")
 
@@ -254,7 +259,8 @@ func get_world_map_bbcode() -> String:
 	t += "• Ты — игрок; фургон у [b]юга[/b] особняка.\n\n"
 	t += "[b]Что за места[/b]\n"
 	t += "• [color=#deb887]Особняк[/color] — деревянный пол у центра арены, въезд с юга; стены двора — тёмная трава вокруг.\n"
-	t += "• [color=#8fbc8f]Три деревни[/color] — у каждой своя плита и рычаг у внешних ворот; второй рычаг [b]закрывает/открывает наружу[/b] после головоломки; третий — [b]внутренний[/b] проход.\n"
+	t += "• [color=#8fbc8f]Три деревни[/color] — плита и рычаг у ворот снаружи; рычаг [b]внешних[/b] ворот стоит [b]внутри[/b] деревни (севернее внутренних ворот); рычаг [b]внутреннего[/b] прохода — у вторых ворот.\n"
+	t += "• [color=#daa520]Грабёж[/color] — подойди в [b]зону у входа[/b] (порог), затем E на [b]ящик[/b].\n"
 	t += "• [color=#dda0dd]Лавка[/color] — только у [b]деревни I[/b] (центр площади); Tab — везде.\n"
 	t += "• [color=#e6c35c]Замок[/color] — восточнее арены; три рычага загадок для короля + бонусные рычаги у дозора, руин и капища.\n"
 	t += "• [color=#aaa]Дороги[/color] — серые плиты на карте ведут к деревням и к замку.\n\n"

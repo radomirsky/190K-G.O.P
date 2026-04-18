@@ -12,6 +12,7 @@ const GUARD_SCRIPT := preload("res://castle_guard.gd")
 func _ready() -> void:
 	_build_courtyard()
 	_build_perimeter()
+	_build_keep()
 	_spawn_king()
 	_spawn_guards()
 	_spawn_king_puzzles()
@@ -63,6 +64,42 @@ func _build_perimeter() -> void:
 	_add_box(self, c + Vector3(hx + t * 0.5, y, 0.0), Vector3(t, h, hz * 2.0 + 2.0 * t), m)
 
 
+func _keep_center() -> Vector3:
+	return courtyard_origin + Vector3(0.0, 0.0, -4.0)
+
+
+## Донжон с проходом: король внутри башни.
+func _build_keep() -> void:
+	var kc := _keep_center()
+	var m := _stone_mat(false)
+	var m2 := _stone_mat(true)
+	var h := 4.85
+	var t := 0.55
+	var y := h * 0.5
+	var w := 17.0
+	var d := 13.0
+	_add_box(self, kc + Vector3(0.0, 0.12, 0.0), Vector3(w, 0.24, d), m2)
+	_add_box(self, kc + Vector3(0.0, y, -d * 0.5 - t * 0.5), Vector3(w + t, h, t), m)
+	var gap := 4.2
+	var side_w := (w - gap) * 0.5
+	_add_box(
+		self,
+		kc + Vector3(-gap * 0.25 - side_w * 0.5, y, d * 0.5 + t * 0.5),
+		Vector3(side_w, h, t),
+		m
+	)
+	_add_box(
+		self,
+		kc + Vector3(gap * 0.25 + side_w * 0.5, y, d * 0.5 + t * 0.5),
+		Vector3(side_w, h, t),
+		m
+	)
+	_add_box(self, kc + Vector3(w * 0.5 + t * 0.5, y, 0.0), Vector3(t, h, d + 2.0 * t), m)
+	_add_box(self, kc + Vector3(-w * 0.5 - t * 0.5, y, 0.0), Vector3(t, h, d + 2.0 * t), m)
+	var th := 10.8
+	_add_box(self, kc + Vector3(0.0, th * 0.5 + 0.26, -1.4), Vector3(8.8, th, 7.8), m)
+
+
 func _spawn_king() -> void:
 	var k := StaticBody3D.new()
 	k.name = "King"
@@ -108,17 +145,19 @@ func _spawn_king() -> void:
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	k.add_child(lbl)
 	add_child(k)
-	k.global_position = courtyard_origin + Vector3(0.0, 0.05, 2.0)
+	var kc := _keep_center()
+	k.global_position = kc + Vector3(0.0, 0.06, -2.9)
 
 
 func _spawn_guards() -> void:
+	var kc := _keep_center()
 	var spots: Array[Vector3] = [
-		courtyard_origin + Vector3(-8.0, 0.05, -6.0),
-		courtyard_origin + Vector3(8.0, 0.05, -6.0),
-		courtyard_origin + Vector3(-8.0, 0.05, 10.0),
-		courtyard_origin + Vector3(8.0, 0.05, 10.0),
+		kc + Vector3(-3.9, 0.05, 7.45),
+		kc + Vector3(3.9, 0.05, 7.45),
+		courtyard_origin + Vector3(-11.5, 0.05, 10.5),
+		courtyard_origin + Vector3(11.5, 0.05, 10.5),
 	]
-	var yaws := [35.0, -35.0, -145.0, 145.0]
+	var yaws := [185.0, 175.0, 25.0, -25.0]
 	for i in range(spots.size()):
 		_spawn_guard_at(spots[i], yaws[i])
 
@@ -244,7 +283,7 @@ func _spawn_world_bonus_puzzles() -> void:
 
 func _add_labels() -> void:
 	var l := Label3D.new()
-	l.text = "КОРОЛЕВСТВО\nзамок · король"
+	l.text = "КОРОЛЕВСТВО\nзамок · трон"
 	l.font_size = 26
 	l.outline_size = 8
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED

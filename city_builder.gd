@@ -3,7 +3,8 @@ extends Node3D
 
 const QUEST_NPC_SCENE := preload("res://quest_npc.tscn")
 const WORLD_SHOP_SCENE := preload("res://world_shop.tscn")
-const VILLAGE_HOUSE_DOOR_SCRIPT := preload("res://village_house_door.gd")
+const VILLAGE_BURGLARY_SCRIPT := preload("res://village_house_burglary.gd")
+const VILLAGE_LOOT_TRIGGER_SCRIPT := preload("res://village_house_loot_trigger.gd")
 const PLATE_SCENE := preload("res://puzzle_pressure_plate.tscn")
 const LEVER_SCENE := preload("res://puzzle_lever.tscn")
 const OUTER_GATE_SCENE := preload("res://village_outer_gate.tscn")
@@ -339,10 +340,11 @@ func _build_village(spec: Dictionary) -> void:
 		lever_outer_toggle.banner_text_when_flag_on = "Внешние ворота закрыты."
 		lever_outer_toggle.banner_text_when_flag_off = "Внешние ворота открыты."
 		add_child(lever_outer_toggle)
-		lever_outer_toggle.global_position = Vector3(gap_cx - 4.8, 0.05, z1 + t + 1.0)
+		# Внутри деревни, севернее внутренних ворот (к площади).
+		lever_outer_toggle.global_position = Vector3(gap_cx + 3.0, 0.05, z_inner - 2.6)
 		var olbl := lever_outer_toggle.get_node_or_null("Label3D") as Label3D
 		if olbl:
-			olbl.text = "Рычаг наружных ворот — E"
+			olbl.text = "Внешние ворота — E\n(в деревне)"
 
 	var z_inner := z1 - 4.2
 	var inner := INNER_GATE_SCENE.instantiate() as StaticBody3D
@@ -399,7 +401,7 @@ func _build_village(spec: Dictionary) -> void:
 				Vector3(hw * 1.06, rh, hd * 1.06),
 				_roof_mat()
 			)
-			_add_house_loot_door(cell_c, hw, hd, gx, gz, spec["village_id"])
+			_add_house_loot_door(cell_c, hw, hd, hh, gx, gz, spec["village_id"])
 
 	var plaza := _plaza_center(spec)
 	_map_label_3d(spec["label"], plaza + Vector3(0.0, 16.5, 0.0))
@@ -407,6 +409,7 @@ func _build_village(spec: Dictionary) -> void:
 	_map_label_3d("ПЛИТА", Vector3(gap_cx, 9.5, z1 + t + 2.75))
 	_map_label_3d("РЫЧАГ\nвход", Vector3(gap_cx + 5.5, 9.5, z1 + t + 1.15))
 	_map_label_3d("ВНУТР. ВОРОТА", Vector3(gap_cx, 10.5, z_inner))
+	_map_label_3d("РЫЧАГ\nвнешн. вор.", Vector3(gap_cx + 3.0, 9.5, z_inner - 2.6))
 	_map_label_3d("РЫЧАГ\nвнутри", Vector3(gap_cx + 3.2, 9.5, z_inner - 1.1))
 
 	if bool(spec.get("has_shop", false)):
@@ -440,26 +443,58 @@ func _build_village(spec: Dictionary) -> void:
 		sn.global_position = plaza + offs[j]
 
 
-func _add_house_loot_door(cell_c: Vector3, hw: float, hd: float, gx: int, gz: int, village_id: int) -> void:
-	var door := StaticBody3D.new()
-	door.name = "HouseLoot_%d_%d_%d" % [village_id, gx, gz]
-	door.set_script(VILLAGE_HOUSE_DOOR_SCRIPT)
-	door.collision_layer = 1
-	door.collision_mask = 1
-	door.village_id = village_id
-	var sh := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(1.35, 1.3, 0.4)
-	sh.shape = box
-	sh.position = Vector3(0.0, 0.66, 0.0)
-	door.add_child(sh)
-	add_child(door)
-	door.global_position = cell_c + Vector3(0.0, 0.04, hd * 0.5 + 0.42)
-	door.house_id = "%d_%d_%d" % [village_id, gx, gz]
+func _add_house_loot_door(
+	cell_c: Vector3, hw: float, hd: float, hh: float, gx: int, gz: int, village_id: int
+) -> void:
+	var root := Node3D.new()
+	root.name = "HouseLoot_%d_%d_%d" % [village_id, gx, gz]
+	root.set_script(VILLAGE_BURGLARY_SCRIPT)
+	root.house_id = "%d_%d_%d" % [village_id, gx, gz]
+	root.village_id = village_id
+	add_child(root)
+	root.global_position = cell_c
+
+	var area := Area3D.new()
+	area.name = "InteriorArea"
+	area.collision_layer = 0
+	area.collision_mask = 1
+	area.monitorable = false
+	var a_sh := CollisionShape3D.new()
+	var a_box := BoxShape3D.new()
+	var ah := clampf(hh * 0.88, 1.85, 3.0)
+	a_box.size = Vector3(maxf(hw * 0.92, 1.2), ah, maxf(hd * 0.5, 1.05))
+	a_sh.shape = a_box
+	a_sh.position = Vector3(0.0, a_box.size.y * 0.5 + 0.04, hd * 0.16)
+	area.add_child(a_sh)
+	root.add_child(area)
+
+	var loot := StaticBody3D.new()
+	loot.name = "LootChest"
+	loot.set_script(VILLAGE_LOOT_TRIGGER_SCRIPT)
+	loot.collision_layer = 1
+	loot.collision_mask = 1
+	var l_sh := CollisionShape3D.new()
+	var l_box := BoxShape3D.new()
+	l_box.size = Vector3(0.88, 0.52, 0.52)
+	l_sh.shape = l_box
+	l_sh.position = Vector3(0.0, 0.32, 0.0)
+	loot.add_child(l_sh)
+	var chest := MeshInstance3D.new()
+	var cm := BoxMesh.new()
+	cm.size = Vector3(0.82, 0.48, 0.48)
+	chest.mesh = cm
+	var cmat := StandardMaterial3D.new()
+	cmat.albedo_color = Color(0.4, 0.24, 0.14, 1)
+	chest.set_surface_override_material(0, cmat)
+	chest.position = Vector3(0.0, 0.3, 0.0)
+	loot.add_child(chest)
+	root.add_child(loot)
+	loot.position = Vector3(0.0, 0.04, hd * 0.36)
+
 	var tag := Label3D.new()
-	tag.text = "Дом — E ограбить"
-	tag.font_size = 16
+	tag.text = "Ящик — E"
+	tag.font_size = 15
 	tag.outline_size = 6
-	tag.position = Vector3(0.0, 1.35, 0.0)
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	door.add_child(tag)
+	tag.position = loot.position + Vector3(0.0, 1.12, 0.0)
+	root.add_child(tag)
