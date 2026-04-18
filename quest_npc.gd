@@ -6,6 +6,7 @@ extends StaticBody3D
 
 func _ready() -> void:
 	add_to_group("quest_npc")
+	add_to_group("talkable_npc")
 	var lbl := get_node_or_null("Label3D") as Label3D
 	if lbl:
 		lbl.text = "Житель [%d] — E" % npc_index

@@ -215,7 +215,7 @@ var _van_fuel_label: Label = null
 var _quest_banner: Label = null
 var _quest_banner_timer: Timer = null
 var _shop_open: bool = false
-## Магазин открыт из зоны киоска на карте (при выходе из зоны закроется).
+## Магазин открыт из зоны лавки на площади деревни (при выходе из зоны закроется).
 var _shop_from_world_zone: bool = false
 var _shop_layer: CanvasLayer = null
 var _world_map_layer: CanvasLayer = null
@@ -753,7 +753,7 @@ func _setup_shop_ui() -> void:
 	margin.add_child(outer)
 	var title := Label.new()
 	title.name = "ShopTitle"
-	title.text = "МАГАЗИН — валюта: жетоны МАМА (Tab / киоск на краю, Esc — закрыть)"
+	title.text = "МАГАЗИН — валюта: жетоны МАМА (Tab / лавка в деревне, Esc — закрыть)"
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	outer.add_child(title)
@@ -805,7 +805,7 @@ func _refresh_shop_buttons() -> void:
 		var r2 := GameProgress.regular_kills % GameProgress.KILLS_FOR_BOSS
 		var kills_until_next := GameProgress.KILLS_FOR_BOSS - r2 if r2 != 0 else GameProgress.KILLS_FOR_BOSS
 		info.text = (
-			"Жетоны «МАМА» — валюта: подбери дроп или с босса (×%d). Сейчас: %d. Босс на каждом %d-м убийстве; до следующего: %d. Киоск на краю арены открывает этот магазин при входе."
+			"Жетоны «МАМА» — валюта: подбери дроп или с босса (×%d). Сейчас: %d. Босс на каждом %d-м убийстве; до следующего: %d. Лавка на площади в деревне открывает магазин при подходе."
 			% [
 				GameProgress.BOSS_MAMA_PICKUP_COUNT,
 				GameProgress.mama_tokens,
@@ -3604,7 +3604,7 @@ func _raycast_aimed_quest_npc(max_dist: float) -> Node:
 		return null
 	var n := col as Node
 	while n != null:
-		if n.is_in_group("quest_npc"):
+		if n.is_in_group("talkable_npc"):
 			return n
 		n = n.get_parent()
 	return null

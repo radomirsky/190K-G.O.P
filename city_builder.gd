@@ -2,6 +2,8 @@ extends Node3D
 ## Город севернее особняка (не на паркете): дома, площадь, проход с головоломкой (плита + рычаг + ворота).
 
 const QUEST_NPC_SCENE := preload("res://quest_npc.tscn")
+const VILLAGER_EXTRA_SCENE := preload("res://villager_extra.tscn")
+const WORLD_SHOP_SCENE := preload("res://world_shop.tscn")
 const PLATE_SCENE := preload("res://puzzle_pressure_plate.tscn")
 const LEVER_SCENE := preload("res://puzzle_lever.tscn")
 const GATE_SCENE := preload("res://puzzle_gate_door.tscn")
@@ -20,6 +22,8 @@ func _ready() -> void:
 	_build_village_walls_and_gateway()
 	_build_village_inner_gate_and_lever()
 	_spawn_quest_npcs()
+	_spawn_village_shop()
+	_spawn_extra_villagers()
 	_register_npc_village_exclusion_zone()
 
 
@@ -235,14 +239,59 @@ func _build_plaza_and_houses() -> void:
 			)
 
 
+func _plaza_cell_center() -> Vector3:
+	var gx := 2
+	var gz := 2
+	return grid_origin + Vector3((float(gx) + 0.5) * cell_size, 0.12, (float(gz) + 0.5) * cell_size)
+
+
+func _spawn_village_shop() -> void:
+	var shop := WORLD_SHOP_SCENE.instantiate() as Node3D
+	if shop == null:
+		return
+	add_child(shop)
+	shop.global_position = _plaza_cell_center()
+	# Лицом к югу (к выходу из деревни).
+	shop.rotation_degrees = Vector3(0.0, 20.0, 0.0)
+
+
+func _spawn_extra_villagers() -> void:
+	var base := _plaza_cell_center()
+	var lines: PackedStringArray = PackedStringArray([
+		"Давно не видели гостей.",
+		"У ворот шумно, когда шлагбаум падает.",
+		"Жетоны МАМА? Покупай у лавки на площади.",
+		"Осторожнее на дороге — фургон не ждёт.",
+		"Синий житель выдаёт поручения, если плиту наступил.",
+		"Третий по счёту любит поговорить про жетоны.",
+		"Крыши держатся — пока что.",
+		"Если заблудился — жми M, карта поможет.",
+	])
+	var spots: Array[Vector3] = [
+		Vector3(-4.2, 0.05, 3.1),
+		Vector3(4.5, 0.05, 2.6),
+		Vector3(-3.8, 0.05, -2.9),
+		Vector3(3.9, 0.05, -3.4),
+		Vector3(0.2, 0.05, 5.5),
+		Vector3(-6.0, 0.05, 0.4),
+		Vector3(6.1, 0.05, -0.8),
+		Vector3(1.2, 0.05, -5.2),
+	]
+	for i in range(mini(spots.size(), lines.size())):
+		var v := VILLAGER_EXTRA_SCENE.instantiate() as StaticBody3D
+		if v == null:
+			continue
+		v.set("greet_line", lines[i])
+		add_child(v)
+		v.global_position = base + spots[i]
+
+
 func _spawn_quest_npcs() -> void:
-	var total_x := float(grid_w) * cell_size
-	var total_z := float(grid_h) * cell_size
-	var mid := grid_origin + Vector3(total_x * 0.5, 0.0, total_z * 0.5)
+	var mid := _plaza_cell_center()
 	var offsets: Array[Vector3] = [
-		Vector3(-2.4, 0.05, -1.2),
-		Vector3(1.9, 0.05, 0.5),
-		Vector3(0.3, 0.05, 2.5),
+		Vector3(-6.2, 0.05, -5.0),
+		Vector3(6.0, 0.05, -4.5),
+		Vector3(-0.5, 0.05, 6.2),
 	]
 	for i in range(mini(3, offsets.size())):
 		var npc := QUEST_NPC_SCENE.instantiate() as StaticBody3D
