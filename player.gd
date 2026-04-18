@@ -356,6 +356,8 @@ func _apply_game_save_spawn() -> void:
 
 
 func _exit_tree() -> void:
+	if not _dead_restart_in_progress and is_inside_tree():
+		GameSave.autosave_if_playing(self)
 	if _held and is_instance_valid(_held):
 		_held.remove_from_group("held_throwable")
 		remove_collision_exception_with(_held)
