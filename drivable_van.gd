@@ -15,6 +15,8 @@ extends CharacterBody3D
 @export var fuel_drain_moving: float = 1.85
 @export var hull_max_hp: int = 100
 @export var hull_hurt_cooldown_sec: float = 0.48
+## Урон касанием врага по корпусу: доля от того же «touch_damage», что получает игрок (у игрока — 100%).
+@export_range(0.05, 1.0, 0.01) var enemy_contact_damage_vs_player_fraction: float = 0.38
 
 var _fuel: float = 100.0
 var _hull_hp: int = 100
@@ -274,8 +276,12 @@ func _resolve_van_damage_from_enemy_contacts() -> void:
 		if float(_hull_hurt_cd.get(id, 0.0)) > 0.0:
 			continue
 		_hull_hurt_cd[id] = hull_hurt_cooldown_sec
-		var dmg := 7
+		var base_touch := 7
 		var td: Variant = node.get("touch_damage")
 		if td != null:
-			dmg = maxi(1, int(td))
+			base_touch = maxi(1, int(td))
+		var dmg := maxi(
+			1,
+			int(round(float(base_touch) * enemy_contact_damage_vs_player_fraction))
+		)
 		take_hull_damage(dmg)
