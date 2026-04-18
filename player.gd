@@ -234,6 +234,12 @@ var _world_map_hints_scroll: ScrollContainer = null
 ## На карте: P скрывает/показывает верхнюю подпись и текст заданий (вид сверху остаётся).
 var _world_map_hints_collapsed: bool = false
 var _world_map_visible: bool = false
+var _world_map_map_wrap: Control = null
+var _world_map_vpc: SubViewportContainer = null
+var _world_map_strip_label: Label = null
+var _world_map_player_marker: ColorRect = null
+var _world_map_click_layer: Control = null
+const WORLD_MAP_PLAYER_MARKER_SIZE := Vector2(32.0, 32.0)
 var _grapple_state: GrappleState = GrappleState.INACTIVE
 var _grapple_target: Node3D = null
 var _grapple_enemy: Node3D = null
@@ -406,6 +412,8 @@ func _process(_delta: float) -> void:
 		if vp_warp:
 			var rw := vp_warp.get_visible_rect()
 			vp_warp.warp_mouse(rw.position + rw.size * 0.5)
+	if _world_map_visible:
+		_update_world_map_player_marker()
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
 	_gun_reload = maxf(_gun_reload - _delta, 0.0)
 	if _equipped == EquippedGun.PYRAMID and _gun_refill_wait > 0.0:
@@ -1100,21 +1108,30 @@ func _setup_world_map_ui() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 	var strip := Label.new()
-	strip.text = "M / Esc — закрыть карту. P — скрыть/показать текст подсказок. Колёсико мыши — приблизить или отдалить вид сверху."
+	_world_map_strip_label = strip
+	_update_world_map_strip_text()
 	strip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	strip.add_theme_color_override("font_color", Color(0.72, 0.82, 0.95, 0.98))
 	vbox.add_child(strip)
 	var map_hint := Label.new()
-	map_hint.text = "Вид сверху: жёлтые подписи в мире — что где; колёсико меняет масштаб."
+	map_hint.text = "Вид сверху: жёлтые подписи в мире — что где; колёсико меняет масштаб. Большой жёлтый квадрат — ты."
 	map_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	map_hint.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0, 0.95))
 	vbox.add_child(map_hint)
 	_world_map_hint_label = map_hint
+	var map_wrap := Control.new()
+	_world_map_map_wrap = map_wrap
+	map_wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	map_wrap.custom_minimum_size = Vector2(400, 220)
+	vbox.add_child(map_wrap)
 	var vpc := SubViewportContainer.new()
-	vpc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_world_map_vpc = vpc
+	vpc.layout_mode = 1
+	vpc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vpc.offset_right = 0.0
+	vpc.offset_bottom = 0.0
 	vpc.stretch = true
-	vpc.custom_minimum_size = Vector2(400, 220)
-	vbox.add_child(vpc)
+	map_wrap.add_child(vpc)
 	var sv := SubViewport.new()
 	sv.size = Vector2i(880, 380)
 	sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
@@ -1132,6 +1149,20 @@ func _setup_world_map_ui() -> void:
 	cam.current = true
 	sv.add_child(cam)
 	_world_map_view_cam = cam
+	_world_map_player_marker = ColorRect.new()
+	_world_map_player_marker.color = Color(1.0, 0.88, 0.1, 0.96)
+	_world_map_player_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_world_map_player_marker.size = WORLD_MAP_PLAYER_MARKER_SIZE
+	_world_map_player_marker.visible = false
+	map_wrap.add_child(_world_map_player_marker)
+	_world_map_click_layer = Control.new()
+	_world_map_click_layer.layout_mode = 1
+	_world_map_click_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_world_map_click_layer.offset_right = 0.0
+	_world_map_click_layer.offset_bottom = 0.0
+	_world_map_click_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_world_map_click_layer.gui_input.connect(_on_world_map_area_gui_input)
+	map_wrap.add_child(_world_map_click_layer)
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.custom_minimum_size = Vector2(100, 140)
@@ -1175,6 +1206,99 @@ func _world_map_wheel_zoom(dir: int) -> void:
 	)
 
 
+func _update_world_map_strip_text() -> void:
+	if _world_map_strip_label == null:
+		return
+	var t := (
+		"M / Esc — закрыть карту. P — скрыть/показать текст подсказок. "
+		+ "Колёсико мыши — приблизить или отдалить вид сверху."
+	)
+	if GameSave.is_creative():
+		t += " Креатив: ЛКМ по виду сверху — телепорт."
+	_world_map_strip_label.text = t
+
+
+func _refresh_world_map_click_layer() -> void:
+	if _world_map_click_layer != null:
+		_world_map_click_layer.mouse_filter = (
+			Control.MOUSE_FILTER_STOP
+			if GameSave.is_creative()
+			else Control.MOUSE_FILTER_IGNORE
+		)
+
+
+func _on_world_map_area_gui_input(event: InputEvent) -> void:
+	if not _world_map_visible or not GameSave.is_creative():
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			_world_map_creative_teleport_to_screen_global(mb.global_position)
+			if _world_map_click_layer != null:
+				_world_map_click_layer.accept_event()
+
+
+func _world_map_creative_teleport_to_screen_global(screen_global: Vector2) -> void:
+	if not GameSave.is_creative():
+		return
+	if _world_map_vpc == null or _world_map_subviewport == null or _world_map_view_cam == null:
+		return
+	var r := _world_map_vpc.get_global_rect()
+	if not r.has_point(screen_global):
+		return
+	var rel := screen_global - r.position
+	var nx := rel.x / maxf(r.size.x, 1.0)
+	var ny := rel.y / maxf(r.size.y, 1.0)
+	nx = clampf(nx, 0.0, 1.0)
+	ny = clampf(ny, 0.0, 1.0)
+	var sp := Vector2(nx * float(_world_map_subviewport.size.x), ny * float(_world_map_subviewport.size.y))
+	var cam := _world_map_view_cam
+	var origin := cam.project_ray_origin(sp)
+	var dir := cam.project_ray_normal(sp)
+	var plane_y := global_position.y
+	if absf(dir.y) < 0.0001:
+		return
+	var tr := (plane_y - origin.y) / dir.y
+	if tr < 0.0:
+		return
+	var target := origin + dir * tr
+	target.y = plane_y
+	if _is_driving_van():
+		exit_van()
+	global_position = target
+	velocity = Vector3.ZERO
+	notify_quest_banner("Креатив: телепорт по карте.")
+
+
+func _update_world_map_player_marker() -> void:
+	if not _world_map_visible:
+		return
+	if (
+		_world_map_player_marker == null
+		or _world_map_map_wrap == null
+		or _world_map_vpc == null
+		or _world_map_subviewport == null
+		or _world_map_view_cam == null
+	):
+		return
+	var cam := _world_map_view_cam
+	var wp := global_position + Vector3(0.0, 0.55, 0.0)
+	if cam.is_position_behind(wp):
+		_world_map_player_marker.visible = false
+		return
+	var sub_sz := _world_map_subviewport.size
+	if sub_sz.x < 1 or sub_sz.y < 1:
+		return
+	var uv := cam.unproject_position(wp)
+	var wrap_sz := _world_map_map_wrap.size
+	if wrap_sz.x < 2.0 or wrap_sz.y < 2.0:
+		return
+	var px := (uv.x / float(sub_sz.x)) * wrap_sz.x
+	var py := (uv.y / float(sub_sz.y)) * wrap_sz.y
+	_world_map_player_marker.visible = true
+	_world_map_player_marker.position = Vector2(px, py) - _world_map_player_marker.size * 0.5
+
+
 func _refresh_world_map_content() -> void:
 	if _world_map_rt == null:
 		return
@@ -1212,8 +1336,11 @@ func _toggle_world_map() -> void:
 	if _world_map_visible:
 		_world_map_hints_collapsed = false
 		_apply_world_map_hints_visibility()
+		_update_world_map_strip_text()
+		_refresh_world_map_click_layer()
 		_refresh_world_map_content()
 		_world_map_start_3d_preview()
+		_update_world_map_player_marker()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_want_mouse_captured = false
 	else:
@@ -1636,7 +1763,7 @@ func _pause_controls_help_text() -> String:
 		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
 		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
-		+ "H — обрез; M — карта (колёсико — масштаб сверху, P — скрыть текст); Tab — магазин\n"
+		+ "H — обрез; M — карта (колёсико — масштаб, жёлтый квадрат — ты; в креативе ЛКМ по виду — телепорт); Tab — магазин\n"
 		+ "6 — бросить динамит (лавка); в режиме «Креатив» — креативная палочка (ещё раз 6 — убрать)\n"
 		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
 		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
