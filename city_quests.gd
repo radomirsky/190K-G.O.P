@@ -241,6 +241,88 @@ func _spawn_final_boss_deferred() -> void:
 	_player_banner(pl, "ФИНАЛ: Божья отвёртка! 20 ударов, бомбы с неба. (Вертолёт — в разработке.)")
 
 
+func reset_for_new_game() -> void:
+	_accepted = [false, false, false]
+	_completed = [false, false, false]
+	_kills_at_accept = [-1, -1, -1]
+	_mama_at_accept = [-1, -1, -1]
+	final_boss_spawned = false
+	_side_accepted.clear()
+	_side_kills0.clear()
+	_side_mama0.clear()
+	_side_done.clear()
+
+
+func get_persistent_state() -> Dictionary:
+	return {
+		"accepted": _accepted.duplicate(),
+		"completed": _completed.duplicate(),
+		"kills_at_accept": _kills_at_accept.duplicate(),
+		"mama_at_accept": _mama_at_accept.duplicate(),
+		"final_boss_spawned": final_boss_spawned,
+		"side_accepted": _side_accepted.duplicate(true),
+		"side_kills0": _side_kills0.duplicate(true),
+		"side_mama0": _side_mama0.duplicate(true),
+		"side_done": _side_done.duplicate(true),
+	}
+
+
+func apply_persistent_state(d: Dictionary) -> void:
+	if d.is_empty():
+		return
+	_accepted = _read_bool_array(d.get("accepted", _accepted), 3)
+	_completed = _read_bool_array(d.get("completed", _completed), 3)
+	_kills_at_accept = _read_int_array(d.get("kills_at_accept", _kills_at_accept), 3, -1)
+	_mama_at_accept = _read_int_array(d.get("mama_at_accept", _mama_at_accept), 3, -1)
+	final_boss_spawned = bool(d.get("final_boss_spawned", false))
+	_side_accepted = _read_int_key_dict(d.get("side_accepted", {}))
+	_side_kills0 = _read_int_key_dict_int_values(d.get("side_kills0", {}))
+	_side_mama0 = _read_int_key_dict_int_values(d.get("side_mama0", {}))
+	_side_done = _read_int_key_dict(d.get("side_done", {}))
+
+
+func _read_bool_array(v: Variant, n: int) -> Array[bool]:
+	var out: Array[bool] = []
+	if typeof(v) != TYPE_ARRAY:
+		for _i in range(n):
+			out.append(false)
+		return out
+	var a: Array = v
+	for i in range(n):
+		out.append(bool(a[i]) if i < a.size() else false)
+	return out
+
+
+func _read_int_array(v: Variant, n: int, fill: int) -> Array[int]:
+	var out: Array[int] = []
+	if typeof(v) != TYPE_ARRAY:
+		for _i in range(n):
+			out.append(fill)
+		return out
+	var a: Array = v
+	for i in range(n):
+		out.append(int(a[i]) if i < a.size() else fill)
+	return out
+
+
+func _read_int_key_dict(v: Variant) -> Dictionary:
+	var out: Dictionary = {}
+	if typeof(v) != TYPE_DICTIONARY:
+		return out
+	for k in v:
+		out[int(k)] = bool(v[k])
+	return out
+
+
+func _read_int_key_dict_int_values(v: Variant) -> Dictionary:
+	var out: Dictionary = {}
+	if typeof(v) != TYPE_DICTIONARY:
+		return out
+	for k in v:
+		out[int(k)] = int(v[k])
+	return out
+
+
 func get_world_map_bbcode() -> String:
 	var t := ""
 	t += "[font_size=22][b]КАРТА И ЗАДАНИЯ[/b][/font_size]\n"

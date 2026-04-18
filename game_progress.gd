@@ -382,3 +382,133 @@ func spawn_boss_mama_drops(world_pos: Vector3) -> void:
 		var ang := TAU * float(i) / float(BOSS_MAMA_PICKUP_COUNT)
 		var r := 1.1 + randf() * 0.55
 		spawn_mama_pickup_at(world_pos + Vector3(cos(ang) * r, 0.55, sin(ang) * r))
+
+
+func reset_for_new_game() -> void:
+	mama_tokens = 0
+	regular_kills = 0
+	villager_kills = 0
+	last_boss_kills_milestone = 0
+	world_time_frozen = false
+	up_pyramid_mag = 0
+	up_pyramid_reload = 0
+	up_stasis_dmg = 0
+	up_sawed_pellets = 0
+	up_grapple_range = 0
+	up_grapple_pull = 0
+	up_grapple_damage = 0
+	up_animatron_reload = 0
+	up_animatron_vortex = 0
+	up_animatron_blast = 0
+	up_katana_dmg = 0
+	up_katana_speed = 0
+	van_turrets_installed = false
+	van_destroyed = false
+	dynamite_stock = 0
+	puzzle_flags.clear()
+	village_outlaw_strikes = 0
+	npc_village_bounds_valid = false
+	npc_village_x_min = 0.0
+	npc_village_x_max = -1.0
+	npc_village_z_min = 0.0
+	npc_village_z_max = -1.0
+	mama_changed.emit(mama_tokens)
+	kills_changed.emit(regular_kills)
+	upgrades_changed.emit()
+
+
+func get_persistent_state() -> Dictionary:
+	return {
+		"mama_tokens": mama_tokens,
+		"regular_kills": regular_kills,
+		"villager_kills": villager_kills,
+		"last_boss_kills_milestone": last_boss_kills_milestone,
+		"world_time_frozen": world_time_frozen,
+		"up_pyramid_mag": up_pyramid_mag,
+		"up_pyramid_reload": up_pyramid_reload,
+		"up_stasis_dmg": up_stasis_dmg,
+		"up_sawed_pellets": up_sawed_pellets,
+		"up_grapple_range": up_grapple_range,
+		"up_grapple_pull": up_grapple_pull,
+		"up_grapple_damage": up_grapple_damage,
+		"up_animatron_reload": up_animatron_reload,
+		"up_animatron_vortex": up_animatron_vortex,
+		"up_animatron_blast": up_animatron_blast,
+		"up_katana_dmg": up_katana_dmg,
+		"up_katana_speed": up_katana_speed,
+		"van_turrets_installed": van_turrets_installed,
+		"van_destroyed": van_destroyed,
+		"dynamite_stock": dynamite_stock,
+		"puzzle_flags": puzzle_flags.duplicate(true),
+		"village_outlaw_strikes": village_outlaw_strikes,
+	}
+
+
+func apply_persistent_state(d: Dictionary) -> void:
+	if d.is_empty():
+		return
+	mama_tokens = int(d.get("mama_tokens", 0))
+	regular_kills = int(d.get("regular_kills", 0))
+	villager_kills = int(d.get("villager_kills", 0))
+	last_boss_kills_milestone = int(d.get("last_boss_kills_milestone", 0))
+	world_time_frozen = bool(d.get("world_time_frozen", false))
+	up_pyramid_mag = int(d.get("up_pyramid_mag", 0))
+	up_pyramid_reload = int(d.get("up_pyramid_reload", 0))
+	up_stasis_dmg = int(d.get("up_stasis_dmg", 0))
+	up_sawed_pellets = int(d.get("up_sawed_pellets", 0))
+	up_grapple_range = int(d.get("up_grapple_range", 0))
+	up_grapple_pull = int(d.get("up_grapple_pull", 0))
+	up_grapple_damage = int(d.get("up_grapple_damage", 0))
+	up_animatron_reload = int(d.get("up_animatron_reload", 0))
+	up_animatron_vortex = int(d.get("up_animatron_vortex", 0))
+	up_animatron_blast = int(d.get("up_animatron_blast", 0))
+	up_katana_dmg = int(d.get("up_katana_dmg", 0))
+	up_katana_speed = int(d.get("up_katana_speed", 0))
+	van_turrets_installed = bool(d.get("van_turrets_installed", false))
+	van_destroyed = bool(d.get("van_destroyed", false))
+	dynamite_stock = int(d.get("dynamite_stock", 0))
+	var pf = d.get("puzzle_flags", {})
+	puzzle_flags.clear()
+	if typeof(pf) == TYPE_DICTIONARY:
+		for k in pf:
+			puzzle_flags[str(k)] = bool(pf[k])
+	village_outlaw_strikes = int(d.get("village_outlaw_strikes", 0))
+	mama_changed.emit(mama_tokens)
+	kills_changed.emit(regular_kills)
+	upgrades_changed.emit()
+
+
+## При смерти в режиме выживания: выложить жетоны МАМА у тела (как «монеты»).
+func scatter_mama_pickups_at(world_pos: Vector3, total: int) -> void:
+	if total <= 0:
+		return
+	var maxp := 50
+	var n: int = mini(total, maxp)
+	n = maxi(n, 1)
+	var base: int = total / n
+	var rem: int = total % n
+	for i in range(n):
+		var v: int = base + (1 if i < rem else 0)
+		if v < 1:
+			continue
+		var ang: float = TAU * float(i) / float(n) + randf() * 0.25
+		var r: float = 0.35 + randf() * 1.1
+		var ppos: Vector3 = world_pos + Vector3(cos(ang) * r, 0.55, sin(ang) * r)
+		spawn_mama_pickup_at_value(ppos, v)
+
+
+func spawn_mama_pickup_at_value(global_pos: Vector3, value: int) -> void:
+	if value < 1:
+		return
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var psc := load("res://mama_pickup.tscn") as PackedScene
+	if psc == null:
+		return
+	var p := psc.instantiate() as Node3D
+	if p == null:
+		return
+	p.set("mama_value", value)
+	scene.add_child(p)
+	p.global_position = global_pos

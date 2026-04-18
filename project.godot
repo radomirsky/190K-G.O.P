@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="190K-G.O.P"
-run/main_scene="res://main.tscn"
+run/main_scene="res://title_menu.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 run/pause_on_focus_loss=false
@@ -26,6 +26,7 @@ ThrowablesBudget="*res://throwable_budget.gd"
 GameProgress="*res://game_progress.gd"
 CityQuests="*res://city_quests.gd"
 KingQuests="*res://king_quests.gd"
+GameSave="*res://game_save.gd"
 
 [display]
 

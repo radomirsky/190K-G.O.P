@@ -1,0 +1,91 @@
+[gd_scene load_steps=2 format=3 uid="uid://bqj8titlemenu01"]
+
+[ext_resource type="Script" path="res://title_menu.gd" id="1"]
+
+[node name="TitleMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.06, 0.12, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MainVBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="LblTitle" type="Label" parent="Center/MainVBox"]
+layout_mode = 2
+text = "190K-G.O.P"
+horizontal_alignment = 1
+
+[node name="BtnContinue" type="Button" parent="Center/MainVBox"]
+custom_minimum_size = Vector2(320, 40)
+layout_mode = 2
+text = "Продолжить игру"
+
+[node name="BtnNew" type="Button" parent="Center/MainVBox"]
+custom_minimum_size = Vector2(320, 40)
+layout_mode = 2
+text = "Новая игра"
+
+[node name="BtnQuit" type="Button" parent="Center/MainVBox"]
+custom_minimum_size = Vector2(320, 40)
+layout_mode = 2
+text = "Выход"
+
+[node name="ModePanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterMode" type="CenterContainer" parent="ModePanel"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ModeVBox" type="VBoxContainer" parent="ModePanel/CenterMode"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LblMode" type="Label" parent="ModePanel/CenterMode/ModeVBox"]
+layout_mode = 2
+text = "Выбери режим новой игры"
+horizontal_alignment = 1
+
+[node name="BtnHardcore" type="Button" parent="ModePanel/CenterMode/ModeVBox"]
+custom_minimum_size = Vector2(380, 42)
+layout_mode = 2
+text = "Хардкор — смерть сбрасывает весь прогресс"
+
+[node name="BtnSurvival" type="Button" parent="ModePanel/CenterMode/ModeVBox"]
+custom_minimum_size = Vector2(380, 42)
+layout_mode = 2
+text = "Выживание — респавн в особняке, МАМА выпадают"
+
+[node name="BtnBack" type="Button" parent="ModePanel/CenterMode/ModeVBox"]
+custom_minimum_size = Vector2(380, 36)
+layout_mode = 2
+text = "Назад"

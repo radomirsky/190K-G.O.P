@@ -104,3 +104,21 @@ func on_king_attacked() -> void:
 	for n in tree.get_nodes_in_group("castle_guard"):
 		if n.has_method("activate_aggro"):
 			n.call("activate_aggro")
+
+
+func reset_for_new_game() -> void:
+	_stage = 0
+	_k0 = 0
+	_v0 = 0
+
+
+func get_persistent_state() -> Dictionary:
+	return {"stage": _stage, "k0": _k0, "v0": _v0}
+
+
+func apply_persistent_state(d: Dictionary) -> void:
+	if d.is_empty():
+		return
+	_stage = int(d.get("stage", 0))
+	_k0 = int(d.get("k0", 0))
+	_v0 = int(d.get("v0", 0))

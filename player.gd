@@ -201,6 +201,8 @@ var _death_visible: bool = false
 ## Первые секунды на экране смерти: нельзя нажимать кнопки и Esc (рестарт).
 var _death_ui_input_locked: bool = false
 const DEATH_UI_LOCK_SEC: float = 3.0
+var _autosave_acc: float = 0.0
+const AUTOSAVE_INTERVAL_SEC: float = 20.0
 var _pause_layer: CanvasLayer = null
 var _pause_overlay: Control = null
 var _pause_main_panel: Control = null
@@ -339,6 +341,18 @@ func _ready() -> void:
 	_gun_ammo = _eff_gun_mag()
 	_stasis_ammo = stasis_mag_size
 	_sawed_ammo = sawed_mag_size
+	call_deferred("_apply_game_save_spawn")
+
+
+func is_dead_for_save() -> bool:
+	return _dead_restart_in_progress
+
+
+func _apply_game_save_spawn() -> void:
+	GameSave.apply_pending_player_transform(self, _camera_pivot)
+	_look_yaw_target = rotation.y
+	if _camera_pivot:
+		_look_pitch_target = _camera_pivot.rotation.x
 
 
 func _exit_tree() -> void:
@@ -1215,6 +1229,9 @@ func _on_player_died() -> void:
 		return
 	if _dead_restart_in_progress:
 		return
+	if GameSave.current_mode == GameSave.Mode.SURVIVAL:
+		_survival_respawn_after_death()
+		return
 	_dead_restart_in_progress = true
 	exit_van()
 	_hide_pause_menu()
@@ -1231,6 +1248,28 @@ func _on_player_died() -> void:
 	_show_death_screen()
 
 
+func _survival_respawn_after_death() -> void:
+	exit_van()
+	var death_pos := global_position
+	var lost := GameProgress.mama_tokens
+	if lost > 0:
+		GameProgress.scatter_mama_pickups_at(death_pos, lost)
+	GameProgress.mama_tokens = 0
+	GameProgress.mama_changed.emit(GameProgress.mama_tokens)
+	global_position = GameSave.get_mansion_spawn()
+	velocity = Vector3.ZERO
+	_hp = max_hp
+	_hp_cd = 0.0
+	_update_hp_ui()
+	rotation.y = 0.0
+	_look_yaw_target = 0.0
+	_look_pitch_target = 0.0
+	if _camera_pivot:
+		_camera_pivot.rotation.x = 0.0
+	notify_quest_banner("Выживание: МАМА остались на месте гибели. Ты в особняке.")
+	GameSave.autosave_if_playing(self)
+
+
 func _restart_scene_after_death() -> void:
 	if _death_visible and _death_ui_input_locked:
 		return
@@ -1238,6 +1277,8 @@ func _restart_scene_after_death() -> void:
 	if tree == null:
 		return
 	tree.paused = false
+	if GameSave.current_mode == GameSave.Mode.HARDCORE:
+		GameSave.reset_world_for_hardcore_respawn()
 	tree.reload_current_scene()
 
 
@@ -1329,6 +1370,11 @@ func _show_death_screen() -> void:
 	_apply_death_ui_lock_state()
 	if _death_layer:
 		_death_layer.visible = true
+	if _death_restart_btn:
+		if GameSave.current_mode == GameSave.Mode.HARDCORE:
+			_death_restart_btn.text = "Сначала (весь прогресс сбросится)"
+		else:
+			_death_restart_btn.text = "Заново"
 	var t := get_tree().create_timer(DEATH_UI_LOCK_SEC, true)
 	t.timeout.connect(_on_death_ui_lock_expired, CONNECT_ONE_SHOT)
 	# Отпускаем мышь для кнопок.
@@ -2915,6 +2961,10 @@ func _physics_process(delta: float) -> void:
 	if _driving_van != null and is_instance_valid(_driving_van):
 		_apply_camera_look_smoothing(delta)
 		return
+	_autosave_acc += delta
+	if _autosave_acc >= AUTOSAVE_INTERVAL_SEC:
+		_autosave_acc = 0.0
+		GameSave.autosave_if_playing(self)
 	var on_floor_before := is_on_floor()
 	if not is_on_floor():
 		velocity.y -= gravity * delta
