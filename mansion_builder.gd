@@ -24,6 +24,28 @@ func _ready() -> void:
 	_build_inner_rigid_walls()
 	_build_ceiling()
 	_add_interior_lights()
+	_add_minimap_floating_labels()
+
+
+func _add_minimap_floating_labels() -> void:
+	var l := Label3D.new()
+	l.text = "ОСОБНЯК\nдерев. пол · арена"
+	l.font_size = 24
+	l.outline_size = 8
+	l.outline_modulate = Color(0.02, 0.02, 0.05, 0.9)
+	l.modulate = Color(0.95, 0.88, 0.72, 1.0)
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.position = Vector3(0.0, 6.2, 1.0)
+	add_child(l)
+	var l2 := Label3D.new()
+	l2.text = "ДВОР\n(трава)"
+	l2.font_size = 18
+	l2.outline_size = 7
+	l2.outline_modulate = Color(0.02, 0.03, 0.04, 0.88)
+	l2.modulate = Color(0.75, 0.9, 0.72, 1.0)
+	l2.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l2.position = Vector3(0.0, 5.5, -28.0)
+	add_child(l2)
 
 
 func _wood_floor_mat() -> StandardMaterial3D:

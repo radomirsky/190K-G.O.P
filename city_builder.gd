@@ -24,7 +24,36 @@ func _ready() -> void:
 	_spawn_quest_npcs()
 	_spawn_village_shop()
 	_spawn_extra_villagers()
+	_add_minimap_floating_labels()
 	_register_npc_village_exclusion_zone()
+
+
+func _map_label_3d(text: String, world_pos: Vector3) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.font_size = 19
+	l.outline_size = 7
+	l.outline_modulate = Color(0.02, 0.02, 0.05, 0.9)
+	l.modulate = Color(1.0, 0.94, 0.78, 1.0)
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	add_child(l)
+	l.global_position = world_pos
+
+
+## Подписи в мире — видны на 3D-карте (вид сверху).
+func _add_minimap_floating_labels() -> void:
+	var plaza := _plaza_cell_center()
+	_map_label_3d("ДЕРЕВНЯ\nплощадь · лавка\n· жители", plaza + Vector3(0.0, 16.5, 0.0))
+	var lay := _village_wall_layout()
+	var gap_cx: float = lay["gap_cx"]
+	var z1: float = lay["z1"]
+	var t: float = lay["t"]
+	_map_label_3d("ВНЕШНИЕ\nВОРОТА", Vector3(gap_cx, 11.0, z1 + t * 0.5))
+	_map_label_3d("ПЛИТА\nнаступи", Vector3(gap_cx, 9.5, z1 + t + 2.75))
+	_map_label_3d("РЫЧАГ\nснаружи · E", Vector3(gap_cx + 5.5, 9.5, z1 + t + 1.15))
+	var z_inner := z1 - 4.2
+	_map_label_3d("ВНУТР.\nВОРОТА", Vector3(gap_cx, 10.5, z_inner))
+	_map_label_3d("РЫЧАГ\nвнутри · E", Vector3(gap_cx + 3.2, 9.5, z_inner - 1.1))
 
 
 func _register_npc_village_exclusion_zone() -> void:

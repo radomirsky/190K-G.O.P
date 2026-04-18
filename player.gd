@@ -221,6 +221,10 @@ var _shop_layer: CanvasLayer = null
 var _world_map_layer: CanvasLayer = null
 var _world_map_rt: RichTextLabel = null
 var _world_map_subviewport: SubViewport = null
+var _world_map_view_cam: Camera3D = null
+const WORLD_MAP_ORTHO_MIN := 22.0
+const WORLD_MAP_ORTHO_MAX := 110.0
+const WORLD_MAP_ORTHO_ZOOM_STEP := 4.5
 var _world_map_hint_label: Label = null
 var _world_map_hints_scroll: ScrollContainer = null
 ## На карте: P скрывает/показывает верхнюю подпись и текст заданий (вид сверху остаётся).
@@ -1055,12 +1059,12 @@ func _setup_world_map_ui() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 	var strip := Label.new()
-	strip.text = "M / Esc — закрыть карту. P — скрыть или показать блок подсказок и заданий (вид сверху не гасится)."
+	strip.text = "M / Esc — закрыть карту. P — скрыть/показать текст подсказок. Колёсико мыши — приблизить или отдалить вид сверху."
 	strip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	strip.add_theme_color_override("font_color", Color(0.72, 0.82, 0.95, 0.98))
 	vbox.add_child(strip)
 	var map_hint := Label.new()
-	map_hint.text = "Вид сверху: игра на паузе, урон отключён."
+	map_hint.text = "Вид сверху: жёлтые подписи в мире — что где; колёсико меняет масштаб."
 	map_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	map_hint.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0, 0.95))
 	vbox.add_child(map_hint)
@@ -1086,6 +1090,7 @@ func _setup_world_map_ui() -> void:
 	cam.position = Vector3(38.0, 118.0, -26.0)
 	cam.current = true
 	sv.add_child(cam)
+	_world_map_view_cam = cam
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.custom_minimum_size = Vector2(100, 140)
@@ -1116,6 +1121,17 @@ func _toggle_world_map_hints() -> void:
 		return
 	_world_map_hints_collapsed = not _world_map_hints_collapsed
 	_apply_world_map_hints_visibility()
+
+
+func _world_map_wheel_zoom(dir: int) -> void:
+	if not _world_map_visible or _world_map_view_cam == null:
+		return
+	# dir < 0 — колёсико вверх (уменьшаем ortho size = приближение)
+	_world_map_view_cam.size = clampf(
+		_world_map_view_cam.size + float(dir) * WORLD_MAP_ORTHO_ZOOM_STEP,
+		WORLD_MAP_ORTHO_MIN,
+		WORLD_MAP_ORTHO_MAX
+	)
 
 
 func _refresh_world_map_content() -> void:
@@ -1544,7 +1560,7 @@ func _pause_controls_help_text() -> String:
 		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
 		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
-		+ "H — обрез; M — карта заданий (на карте P — скрыть/показать подсказки); Tab — магазин\n"
+		+ "H — обрез; M — карта (колёсико — масштаб сверху, P — скрыть текст); Tab — магазин\n"
 		+ "6 — бросить динамит (покупается в лавке за МАМА)\n"
 		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
 		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
@@ -4047,6 +4063,17 @@ class WorldMapOverlayRoot extends ColorRect:
 	func _unhandled_input(event: InputEvent) -> void:
 		if not visible:
 			return
+		if event is InputEventMouseButton:
+			var mb := event as InputEventMouseButton
+			if mb.pressed and player_node != null and is_instance_valid(player_node):
+				if mb.button_index == MOUSE_BUTTON_WHEEL_UP and player_node.has_method("_world_map_wheel_zoom"):
+					player_node.call("_world_map_wheel_zoom", -1)
+					get_viewport().set_input_as_handled()
+					return
+				if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and player_node.has_method("_world_map_wheel_zoom"):
+					player_node.call("_world_map_wheel_zoom", 1)
+					get_viewport().set_input_as_handled()
+					return
 		if event is InputEventKey and event.pressed and not event.echo:
 			var k := event as InputEventKey
 			if k.keycode == KEY_P or k.physical_keycode == KEY_P:
