@@ -752,7 +752,9 @@ func _setup_shop_ui() -> void:
 	margin.add_child(outer)
 	var title := Label.new()
 	title.name = "ShopTitle"
-		title.text = "МАГАЗИН — валюта: жетоны МАМА (Tab / киоск на краю, Esc — закрыть)"
+	title.text = "МАГАЗИН — валюта: жетоны МАМА (Tab / киоск на краю, Esc — закрыть)"
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	outer.add_child(title)
 	var info := Label.new()
 	info.name = "ShopInfo"
