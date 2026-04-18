@@ -72,8 +72,10 @@ func _process(delta: float) -> void:
 		if _player == null:
 			return
 
+	var strikes := GameProgress.village_outlaw_strikes
+	var interval := spawn_every_sec / maxf(0.35, 1.0 + float(strikes) * 0.14)
 	_t += delta
-	if _t < spawn_every_sec:
+	if _t < interval:
 		return
 	_t = 0.0
 
@@ -83,7 +85,8 @@ func _process(delta: float) -> void:
 		if node is Node and (node as Node).is_in_group("boss"):
 			continue
 		n_alive += 1
-	if n_alive >= max_alive:
+	var cap := max_alive + mini(strikes, 12)
+	if n_alive >= cap:
 		return
 
 	_spawn_enemy()
@@ -106,6 +109,7 @@ func _spawn_enemy() -> void:
 	if e.has_method("set"):
 		e.set("player_path", get_path_to(_player))
 
+	var outlaw := GameProgress.village_outlaw_strikes
 	for _attempt in range(36):
 		var r := randf_range(spawn_radius_min, spawn_radius_max)
 		var a := randf_range(0.0, TAU)
@@ -113,8 +117,9 @@ func _spawn_enemy() -> void:
 		var want := _player.global_position + off + Vector3(0.0, spawn_height, 0.0)
 		var base := _snap_to_floor(want)
 		var pos := base + Vector3.UP * spawn_height
-		if GameProgress.is_pos_in_npc_village_xz(pos) or GameProgress.is_pos_in_npc_village_xz(base):
-			continue
+		if outlaw <= 0:
+			if GameProgress.is_pos_in_npc_village_xz(pos) or GameProgress.is_pos_in_npc_village_xz(base):
+				continue
 		e.global_position = pos
 		return
 	var fb2 := _snap_to_floor(Vector3(-14.0, 0.0, 10.0) + Vector3(0.0, spawn_height, 0.0))

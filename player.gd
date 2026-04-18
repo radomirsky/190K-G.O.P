@@ -2231,6 +2231,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				exit_van()
 			elif _try_interact_puzzle_lever():
 				pass
+			elif _try_interact_village_house_loot():
+				pass
 			elif _try_interact_quest_npc():
 				pass
 			elif _held:
@@ -2689,7 +2691,11 @@ func _katana_ray_damage(from: Vector3, direction: Vector3, reach: float) -> void
 		if n.is_in_group("enemy"):
 			if n.has_method("take_katana_hit"):
 				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
-			break
+			return
+		if n.is_in_group("village_damageable_npc"):
+			if n.has_method("take_katana_hit"):
+				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
+			return
 		n = n.get_parent()
 
 
@@ -3654,6 +3660,50 @@ func _raycast_aimed_quest_npc(max_dist: float) -> Node:
 			return n
 		n = n.get_parent()
 	return null
+
+
+func _raycast_aimed_village_house_loot(max_dist: float) -> Node:
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var space := get_world_3d().direct_space_state
+	var to := from + dir * max_dist
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.hit_from_inside = true
+	var excl: Array[RID] = [get_rid()]
+	if _held != null and is_instance_valid(_held):
+		excl.append(_held.get_rid())
+	query.exclude = excl
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty() or not hit.has("collider"):
+		return null
+	var col: Object = hit["collider"]
+	if not col is Node:
+		return null
+	var n := col as Node
+	while n != null:
+		if n.is_in_group("village_house_loot"):
+			return n
+		n = n.get_parent()
+	return null
+
+
+func _try_interact_village_house_loot() -> bool:
+	if not _world_actions_input_ok():
+		return false
+	if _shop_open or _pause_visible:
+		return false
+	if _is_driving_van():
+		return false
+	var h := _raycast_aimed_village_house_loot(4.0)
+	if h == null:
+		return false
+	if h.has_method("interact"):
+		h.call("interact", self)
+		return true
+	return false
 
 
 func _try_interact_quest_npc() -> bool:

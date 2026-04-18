@@ -2,8 +2,8 @@ extends Node3D
 ## Город севернее особняка (не на паркете): дома, площадь, проход с головоломкой (плита + рычаг + ворота).
 
 const QUEST_NPC_SCENE := preload("res://quest_npc.tscn")
-const VILLAGER_EXTRA_SCENE := preload("res://villager_extra.tscn")
 const WORLD_SHOP_SCENE := preload("res://world_shop.tscn")
+const VILLAGE_HOUSE_DOOR_SCRIPT := preload("res://village_house_door.gd")
 const PLATE_SCENE := preload("res://puzzle_pressure_plate.tscn")
 const LEVER_SCENE := preload("res://puzzle_lever.tscn")
 const GATE_SCENE := preload("res://puzzle_gate_door.tscn")
@@ -22,8 +22,8 @@ func _ready() -> void:
 	_build_village_walls_and_gateway()
 	_build_village_inner_gate_and_lever()
 	_spawn_quest_npcs()
+	_spawn_side_quest_npcs()
 	_spawn_village_shop()
-	_spawn_extra_villagers()
 	_add_minimap_floating_labels()
 	_register_npc_village_exclusion_zone()
 
@@ -263,6 +263,31 @@ func _build_plaza_and_houses() -> void:
 				Vector3(hw * 1.06, rh, hd * 1.06),
 				_roof_mat()
 			)
+			_add_house_loot_door(cell_c, hw, hd, gx, gz)
+
+
+func _add_house_loot_door(cell_c: Vector3, hw: float, hd: float, gx: int, gz: int) -> void:
+	var door := StaticBody3D.new()
+	door.name = "HouseLoot_%d_%d" % [gx, gz]
+	door.set_script(VILLAGE_HOUSE_DOOR_SCRIPT)
+	door.collision_layer = 1
+	door.collision_mask = 1
+	var sh := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.35, 1.3, 0.4)
+	sh.shape = box
+	sh.position = Vector3(0.0, 0.66, 0.0)
+	door.add_child(sh)
+	add_child(door)
+	door.global_position = cell_c + Vector3(0.0, 0.04, hd * 0.5 + 0.42)
+	door.house_id = "%d_%d" % [gx, gz]
+	var tag := Label3D.new()
+	tag.text = "Дом — E ограбить"
+	tag.font_size = 16
+	tag.outline_size = 6
+	tag.position = Vector3(0.0, 1.35, 0.0)
+	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	door.add_child(tag)
 
 
 func _plaza_cell_center() -> Vector3:
@@ -281,18 +306,8 @@ func _spawn_village_shop() -> void:
 	shop.rotation_degrees = Vector3(0.0, 20.0, 0.0)
 
 
-func _spawn_extra_villagers() -> void:
+func _spawn_side_quest_npcs() -> void:
 	var base := _plaza_cell_center()
-	var lines: PackedStringArray = PackedStringArray([
-		"Давно не видели гостей.",
-		"У ворот шумно, когда шлагбаум падает.",
-		"Жетоны МАМА? Покупай у лавки на площади.",
-		"Осторожнее на дороге — фургон не ждёт.",
-		"Синий житель выдаёт поручения, если плиту наступил.",
-		"Третий по счёту любит поговорить про жетоны.",
-		"Крыши держатся — пока что.",
-		"Если заблудился — жми M, карта поможет.",
-	])
 	var spots: Array[Vector3] = [
 		Vector3(-4.2, 0.05, 3.1),
 		Vector3(4.5, 0.05, 2.6),
@@ -303,13 +318,13 @@ func _spawn_extra_villagers() -> void:
 		Vector3(6.1, 0.05, -0.8),
 		Vector3(1.2, 0.05, -5.2),
 	]
-	for i in range(mini(spots.size(), lines.size())):
-		var v := VILLAGER_EXTRA_SCENE.instantiate() as StaticBody3D
-		if v == null:
+	for i in range(spots.size()):
+		var npc := QUEST_NPC_SCENE.instantiate() as StaticBody3D
+		if npc == null:
 			continue
-		v.set("greet_line", lines[i])
-		add_child(v)
-		v.global_position = base + spots[i]
+		npc.npc_index = 3 + i
+		add_child(npc)
+		npc.global_position = base + spots[i]
 
 
 func _spawn_quest_npcs() -> void:

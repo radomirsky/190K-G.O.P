@@ -5,6 +5,8 @@ signal mama_changed(new_total: int)
 signal kills_changed(total: int)
 signal boss_spawn_requested
 signal upgrades_changed
+## Рост «охоты» после убийства жителя или ограбления дома в деревне.
+signal village_outlaw_changed(strikes: int)
 
 const KILLS_FOR_BOSS := 10
 const BOSS_MAMA_PICKUP_COUNT := 5
@@ -52,6 +54,18 @@ var van_destroyed: bool = false
 var dynamite_stock: int = 0
 ## Флаги головоломок (плиты, рычаги, ворота) — ключ → true.
 var puzzle_flags: Dictionary = {}
+## Накопленные проступки в деревне: убийство жителя +2, ограбление дома +1. Враги чаще и могут зайти в деревню.
+var village_outlaw_strikes: int = 0
+
+
+func register_village_murder() -> void:
+	village_outlaw_strikes += 2
+	village_outlaw_changed.emit(village_outlaw_strikes)
+
+
+func register_village_robbery() -> void:
+	village_outlaw_strikes += 1
+	village_outlaw_changed.emit(village_outlaw_strikes)
 
 
 func set_puzzle_flag(key: String, value: bool = true) -> void:

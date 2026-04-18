@@ -16,6 +16,11 @@ var _completed: Array[bool] = [false, false, false]
 var _kills_at_accept: Array[int] = [-1, -1, -1]
 var _mama_at_accept: Array[int] = [-1, -1, -1]
 var final_boss_spawned: bool = false
+## Жители 3–10: побочные поручения.
+var _side_accepted: Dictionary = {}
+var _side_kills0: Dictionary = {}
+var _side_mama0: Dictionary = {}
+var _side_done: Dictionary = {}
 
 
 func _player_banner(player: Node, msg: String) -> void:
@@ -69,6 +74,68 @@ func on_npc_interact(idx: int, player: Node) -> void:
 
 	if _completed[0] and _completed[1] and _completed[2]:
 		call_deferred("_spawn_final_boss_deferred")
+
+
+const SIDE_KILLS_NEED: int = 2
+const SIDE_MAMA_NEED: int = 2
+const SIDE_KILL_REWARD_MAMA: int = 4
+const SIDE_MAMA_REWARD_MAMA: int = 5
+
+
+func on_side_npc_interact(idx: int, player: Node) -> void:
+	if final_boss_spawned:
+		_player_banner(player, "Главная угроза уже отбита. Отдыхай.")
+		return
+	if idx < 3 or idx > 10:
+		return
+	if bool(_side_done.get(idx, false)):
+		_player_banner(player, "Спасибо, ты нас выручил!")
+		return
+	if not bool(_side_accepted.get(idx, false)):
+		_side_accepted[idx] = true
+		if (idx % 2) == 1:
+			_side_kills0[idx] = GameProgress.regular_kills
+			_player_banner(
+				player,
+				"Поручение: убей ещё %d врагов (с этого момента). Потом снова E." % SIDE_KILLS_NEED
+			)
+		else:
+			_side_mama0[idx] = GameProgress.mama_tokens
+			_player_banner(
+				player,
+				"Поручение: собери ещё %d МАМА (с этого момента). Потом снова E." % SIDE_MAMA_NEED
+			)
+		GameProgress.upgrades_changed.emit()
+		return
+	if (idx % 2) == 1:
+		var k0: int = int(_side_kills0.get(idx, 0))
+		var got_k: int = GameProgress.regular_kills - k0
+		if got_k < SIDE_KILLS_NEED:
+			_player_banner(player, "Осталось убить врагов: %d" % (SIDE_KILLS_NEED - got_k))
+			return
+		GameProgress.add_mama(SIDE_KILL_REWARD_MAMA)
+		_side_done[idx] = true
+		_player_banner(player, "Сделано! Награда: +%d МАМА." % SIDE_KILL_REWARD_MAMA)
+	else:
+		var m0: int = int(_side_mama0.get(idx, 0))
+		var got_m: int = GameProgress.mama_tokens - m0
+		if got_m < SIDE_MAMA_NEED:
+			_player_banner(player, "Осталось МАМА: %d" % (SIDE_MAMA_NEED - got_m))
+			return
+		GameProgress.add_mama(SIDE_MAMA_REWARD_MAMA)
+		_side_done[idx] = true
+		_player_banner(player, "Сделано! Награда: +%d МАМА." % SIDE_MAMA_REWARD_MAMA)
+	GameProgress.upgrades_changed.emit()
+
+
+func on_village_npc_killed(idx: int) -> void:
+	GameProgress.register_village_murder()
+	if idx >= 3 and idx <= 10:
+		_side_accepted.erase(idx)
+		_side_kills0.erase(idx)
+		_side_mama0.erase(idx)
+		_side_done.erase(idx)
+	GameProgress.upgrades_changed.emit()
 
 
 func _is_quest_progress_ok(idx: int) -> bool:
@@ -137,11 +204,15 @@ func get_world_map_bbcode() -> String:
 	t += "[font_size=22][b]КАРТА И ЗАДАНИЯ[/b][/font_size]\n"
 	t += "[i]Пауза мира и защита от урона. M / Esc — закрыть. P — скрыть/показать этот список. [b]Колёсико мыши[/b] — приблизить/отдалить [b]вид сверху[/b]. Tab или лавка в деревне — магазин.[/i]\n\n"
 	t += "[b]Кто есть кто (капсулы, E)[/b]\n"
-	t += "• [color=#5a8fe8]Житель №1[/color] — над головой «Житель 0 — E» — с [b]западо-юго-запада[/b] от центра площади — квест: убить врагов.\n"
-	t += "• [color=#5a8fe8]Житель №2[/color] — «Житель 1 — E» — на [b]востоке[/b] — квест: внешние ворота.\n"
-	t += "• [color=#5a8fe8]Житель №3[/color] — «Житель 2 — E» — с [b]севера[/b] площади — квест: жетоны МАМА.\n"
-	t += "• Остальные капсулы — [b]горожане[/b] без квеста; E — короткая реплика.\n"
-	t += "• Ты — игрок; фургон припаркован у [b]южного[/b] выхода из особняка (если не уехал).\n\n"
+	t += "• [color=#5a8fe8]Житель 0[/color] — северо-западнее лавки — [b]главный[/b] квест: враги (нужна плита у ворот).\n"
+	t += "• [color=#5a8fe8]Житель 1[/color] — восток — главный: внешние ворота.\n"
+	t += "• [color=#5a8fe8]Житель 2[/color] — север площади — главный: МАМА.\n"
+	t += "• [color=#8fbc8f]Жители 3–10[/color] — по площади — [b]побочные[/b] поручения (2 убийства или 2 МАМА с момента согласия).\n"
+	t += "• [color=#ff8888]Катана[/color] режет жителей; убийство или ограбление дома — враги [b]чаще[/b] и могут [b]заходить в деревню[/b].\n"
+	t += "• [color=#daa520]Дома[/color] — жёлтая «дверь» у фасада — E [b]ограбить[/b] (один раз на дом).\n"
+	if GameProgress.village_outlaw_strikes > 0:
+		t += "  [color=#ff6666]Розыск в деревне: %d (чем выше — тем злее спавн).[/color]\n" % GameProgress.village_outlaw_strikes
+	t += "• Ты — игрок; фургон у [b]юга[/b] особняка.\n\n"
 	t += "[b]Что за места[/b]\n"
 	t += "• [color=#deb887]Особняк[/color] — деревянный пол у центра арены, въезд с юга; стены двора — тёмная трава вокруг.\n"
 	t += "• [color=#8fbc8f]Деревня[/color] — севернее двора, [b]каменный периметр[/b]; [b]внешние[/b] ворота открываются только [b]снаружи[/b] (плита + рычаг у дороги); [b]внутренний[/b] рычаг — только вторые ворота в коридоре.\n"
@@ -166,8 +237,8 @@ func get_world_map_bbcode() -> String:
 	else:
 		t += "     Рычаг ещё не переключён.\n"
 	t += "  Когда оба пункта готовы — [b]блок у ворот[/b] уберётся.\n\n"
-	t += "[b]Жители (E)[/b]\n"
-	var qn := ["№1 — убить врагов", "№2 — открыть ворота (см. выше)", "№3 — собрать жетоны МАМА"]
+	t += "[b]Главные жители (E)[/b]\n"
+	var qn := ["Житель 0 — враги", "Житель 1 — ворота", "Житель 2 — МАМА"]
 	for i in range(3):
 		if _completed[i]:
 			t += "  [color=#888]%s — выполнено[/color]\n" % qn[i]
@@ -175,6 +246,14 @@ func get_world_map_bbcode() -> String:
 			t += "  [color=#ffcc66]%s — в процессе[/color]\n" % qn[i]
 		else:
 			t += "  %s\n" % qn[i]
+	t += "[b]Побочные (жители 3–10)[/b]\n"
+	for j in range(3, 11):
+		if bool(_side_done.get(j, false)):
+			t += "  [color=#888]Житель %d — сделано[/color]\n" % j
+		elif bool(_side_accepted.get(j, false)):
+			t += "  [color=#ffcc66]Житель %d — в процессе[/color]\n" % j
+		else:
+			t += "  Житель %d — поговори (E)\n" % j
 	if final_boss_spawned:
 		t += "\n[color=#ff8888]Финальный босс уже в мире.[/color]\n"
 	return t
