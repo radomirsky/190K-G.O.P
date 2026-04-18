@@ -15,9 +15,10 @@ radial_segments = 10
 albedo_color = Color(0.35, 0.55, 0.92, 1)
 roughness = 0.65
 
-[node name="QuestNpc" type="StaticBody3D"]
+[node name="QuestNpc" type="CharacterBody3D"]
 collision_layer = 1
 collision_mask = 1
+floor_snap_length = 0.12
 script = ExtResource("1_script")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

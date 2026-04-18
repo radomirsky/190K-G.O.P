@@ -1224,9 +1224,10 @@ func _on_player_died() -> void:
 	# Пауза/Esc на экране смерти обрабатываются здесь, не в _process.
 	set_process_unhandled_input(true)
 	GameProgress.world_time_frozen = true
-	for node in get_tree().get_nodes_in_group("enemy"):
-		if node is CharacterBody3D:
-			(node as CharacterBody3D).set_physics_process(false)
+	for grp in ["enemy", "village_katana_mob"]:
+		for node in get_tree().get_nodes_in_group(grp):
+			if node is CharacterBody3D:
+				(node as CharacterBody3D).set_physics_process(false)
 	_show_death_screen()
 
 
@@ -3519,15 +3520,16 @@ func _freeze_world_time() -> void:
 		return
 	GameProgress.world_time_frozen = true
 	_world_time_snap.clear()
-	for node in get_tree().get_nodes_in_group("enemy"):
-		if not node is CharacterBody3D:
-			continue
-		var e := node as CharacterBody3D
-		if not e.is_inside_tree():
-			continue
-		_world_time_snap[e] = {"vel": e.velocity}
-		e.velocity = Vector3.ZERO
-		e.set_physics_process(false)
+	for grp in ["enemy", "village_katana_mob"]:
+		for node in get_tree().get_nodes_in_group(grp):
+			if not node is CharacterBody3D:
+				continue
+			var e := node as CharacterBody3D
+			if not e.is_inside_tree():
+				continue
+			_world_time_snap[e] = {"vel": e.velocity}
+			e.velocity = Vector3.ZERO
+			e.set_physics_process(false)
 	for node in get_tree().get_nodes_in_group("throwable"):
 		if not node is RigidBody3D:
 			continue
@@ -3552,11 +3554,13 @@ func _resume_world_time() -> void:
 	for node in _world_time_snap.keys():
 		if not is_instance_valid(node):
 			continue
-		if node is CharacterBody3D and (node as Node).is_in_group("enemy"):
+		if node is CharacterBody3D:
 			var e := node as CharacterBody3D
-			e.set_physics_process(true)
-			var st_e: Dictionary = _world_time_snap[node]
-			e.velocity = st_e.get("vel", Vector3.ZERO) as Vector3
+			var en := e as Node
+			if en.is_in_group("enemy") or en.is_in_group("village_katana_mob"):
+				e.set_physics_process(true)
+				var st_e: Dictionary = _world_time_snap[node]
+				e.velocity = st_e.get("vel", Vector3.ZERO) as Vector3
 		elif node is RigidBody3D:
 			var rb := node as RigidBody3D
 			var st: Dictionary = _world_time_snap[node]

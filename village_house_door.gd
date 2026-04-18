@@ -19,8 +19,19 @@ func interact(player: Node) -> void:
 	var loot := 2 + randi() % 3
 	GameProgress.add_mama(loot)
 	GameProgress.register_village_robbery()
+	var mob := false
+	if player != null and is_instance_valid(player):
+		mob = CityQuests.robbery_triggers_villager_mob(self, player)
+		if mob:
+			CityQuests.alert_all_villagers_katana_mob()
 	if player != null and is_instance_valid(player) and player.has_method("notify_quest_banner"):
-		player.call(
-			"notify_quest_banner",
-			"Нашёл %d МАМА. Ограбление! В деревне появятся враги — осторожнее." % loot
-		)
+		if mob:
+			player.call(
+				"notify_quest_banner",
+				"Нашёл %d МАМА! Тебя видели — жители с катанами!" % loot
+			)
+		else:
+			player.call(
+				"notify_quest_banner",
+				"Нашёл %d МАМА. Ограбление! В деревне появятся враги — осторожнее." % loot
+			)

@@ -319,7 +319,7 @@ func _spawn_side_quest_npcs() -> void:
 		Vector3(1.2, 0.05, -5.2),
 	]
 	for i in range(spots.size()):
-		var npc := QUEST_NPC_SCENE.instantiate() as StaticBody3D
+		var npc := QUEST_NPC_SCENE.instantiate() as CharacterBody3D
 		if npc == null:
 			continue
 		npc.npc_index = 3 + i
@@ -335,7 +335,7 @@ func _spawn_quest_npcs() -> void:
 		Vector3(-0.5, 0.05, 6.2),
 	]
 	for i in range(mini(3, offsets.size())):
-		var npc := QUEST_NPC_SCENE.instantiate() as StaticBody3D
+		var npc := QUEST_NPC_SCENE.instantiate() as CharacterBody3D
 		if npc == null:
 			continue
 		npc.npc_index = i

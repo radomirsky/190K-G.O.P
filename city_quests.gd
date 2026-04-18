@@ -128,8 +128,40 @@ func on_side_npc_interact(idx: int, player: Node) -> void:
 	GameProgress.upgrades_changed.emit()
 
 
+## Если житель в этом радиусе от двери или от игрока — ограбление считается «на глазах», все жители с катанами.
+const ROBBERY_WITNESS_RADIUS_FOR_MOB: float = 20.0
+
+
+func robbery_triggers_villager_mob(door_node: Node3D, player: Node) -> bool:
+	var tree := door_node.get_tree()
+	if tree == null:
+		return false
+	var pts: Array[Vector3] = [door_node.global_position]
+	if player is Node3D:
+		pts.append((player as Node3D).global_position)
+	var lim2 := ROBBERY_WITNESS_RADIUS_FOR_MOB * ROBBERY_WITNESS_RADIUS_FOR_MOB
+	for n in tree.get_nodes_in_group("talkable_npc"):
+		if not n is Node3D:
+			continue
+		var pg: Vector3 = (n as Node3D).global_position
+		for pt in pts:
+			if pg.distance_squared_to(pt) <= lim2:
+				return true
+	return false
+
+
+func alert_all_villagers_katana_mob() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	for n in tree.get_nodes_in_group("quest_npc"):
+		if n.has_method("activate_katana_mob"):
+			n.call("activate_katana_mob")
+
+
 func on_village_npc_killed(idx: int) -> void:
 	GameProgress.register_village_murder()
+	alert_all_villagers_katana_mob()
 	if idx >= 3 and idx <= 10:
 		_side_accepted.erase(idx)
 		_side_kills0.erase(idx)
@@ -208,8 +240,8 @@ func get_world_map_bbcode() -> String:
 	t += "• [color=#5a8fe8]Житель 1[/color] — восток — главный: внешние ворота.\n"
 	t += "• [color=#5a8fe8]Житель 2[/color] — север площади — главный: МАМА.\n"
 	t += "• [color=#8fbc8f]Жители 3–10[/color] — по площади — [b]побочные[/b] поручения (2 убийства или 2 МАМА с момента согласия).\n"
-	t += "• [color=#ff8888]Катана[/color] режет жителей; убийство или ограбление дома — враги [b]чаще[/b] и могут [b]заходить в деревню[/b].\n"
-	t += "• [color=#daa520]Дома[/color] — жёлтая «дверь» у фасада — E [b]ограбить[/b] (один раз на дом).\n"
+	t += "• [color=#ff8888]Катана[/color] режет жителей; [b]убийство жителя[/b] — все остальные с катанами. [b]Ограбление на глазах[/b] (житель рядом) — то же. Плюс враги [b]чаще[/b] и могут [b]заходить в деревню[/b].\n"
+	t += "• [color=#daa520]Дома[/color] — жёлтая «дверь» у фасада — E [b]ограбить[/b] (один раз на дом; тихое ограбление без свидетелей — без толпы с катанами).\n"
 	if GameProgress.village_outlaw_strikes > 0:
 		t += "  [color=#ff6666]Розыск в деревне: %d (чем выше — тем злее спавн).[/color]\n" % GameProgress.village_outlaw_strikes
 	t += "• Ты — игрок; фургон у [b]юга[/b] особняка.\n\n"
