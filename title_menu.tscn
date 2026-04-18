@@ -30,17 +30,23 @@ grow_vertical = 2
 
 [node name="MainVBox" type="VBoxContainer" parent="Center"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 12
 
 [node name="LblTitle" type="Label" parent="Center/MainVBox"]
 layout_mode = 2
 text = "190K-G.O.P"
 horizontal_alignment = 1
 
-[node name="BtnContinue" type="Button" parent="Center/MainVBox"]
-custom_minimum_size = Vector2(320, 40)
+[node name="LblHint" type="Label" parent="Center/MainVBox"]
 layout_mode = 2
-text = "Продолжить игру"
+text = "Максимум 4 мира. «Удалить» освобождает слот. Если все заняты — при новой игре выбери, какой слот заменить."
+horizontal_alignment = 1
+autowrap_mode = 2
+custom_minimum_size = Vector2(520, 0)
+
+[node name="WorldsHost" type="VBoxContainer" parent="Center/MainVBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
 
 [node name="BtnNew" type="Button" parent="Center/MainVBox"]
 custom_minimum_size = Vector2(320, 40)
@@ -99,3 +105,37 @@ text = "Мирный — враги не появляются"
 custom_minimum_size = Vector2(380, 36)
 layout_mode = 2
 text = "Назад"
+
+[node name="ReplacePanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterReplace" type="CenterContainer" parent="ReplacePanel"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ReplaceVBox" type="VBoxContainer" parent="ReplacePanel/CenterReplace"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LblReplace" type="Label" parent="ReplacePanel/CenterReplace/ReplaceVBox"]
+layout_mode = 2
+text = "Все 4 слота заняты. Выбери слот — текущее сохранение будет заменено новым миром."
+horizontal_alignment = 1
+autowrap_mode = 2
+custom_minimum_size = Vector2(460, 0)
+
+[node name="ReplaceSlotsHost" type="VBoxContainer" parent="ReplacePanel/CenterReplace/ReplaceVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BtnReplaceBack" type="Button" parent="ReplacePanel/CenterReplace/ReplaceVBox"]
+custom_minimum_size = Vector2(380, 36)
+layout_mode = 2
+text = "Назад к выбору режима"

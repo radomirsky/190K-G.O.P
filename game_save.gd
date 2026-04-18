@@ -1,13 +1,19 @@
 extends Node
 
-## Слот сохранения: режим игры, прогресс и позиция игрока (для «Продолжить»).
+## До 4 независимых миров (файлы user://world_1.save … world_4.save).
+## Старый user://profile.save при первом запуске переносится в слот 1.
 
-const SAVE_PATH := "user://profile.save"
 const SAVE_VERSION := 1
 const MAIN_SCENE := "res://main.tscn"
+const MAX_WORLDS := 4
+const LEGACY_SAVE_PATH := "user://profile.save"
+
 enum Mode { NONE, HARDCORE, SURVIVAL, CREATIVE, PEACEFUL }
 
+## Активный слот 1..MAX_WORLDS во время игры и автосохранения.
+var current_slot: int = 1
 var current_mode: Mode = Mode.NONE
+var _pending_player: Dictionary = {}
 
 
 func is_creative() -> bool:
@@ -16,14 +22,128 @@ func is_creative() -> bool:
 
 func is_peaceful() -> bool:
 	return current_mode == Mode.PEACEFUL
-var _pending_player: Dictionary = {}
+
+
+func _ready() -> void:
+	_migrate_legacy_profile_if_needed()
+
+
+func slot_path(slot: int) -> String:
+	return "user://world_%d.save" % clampi(slot, 1, MAX_WORLDS)
+
+
+func _migrate_legacy_profile_if_needed() -> void:
+	var ddir := DirAccess.open("user://")
+	# Слот 1 уже занят — дубликат profile.save удаляем.
+	if FileAccess.file_exists(LEGACY_SAVE_PATH) and FileAccess.file_exists(slot_path(1)):
+		if ddir and ddir.file_exists("profile.save"):
+			ddir.remove("profile.save")
+		return
+	if not FileAccess.file_exists(LEGACY_SAVE_PATH):
+		return
+	if FileAccess.file_exists(slot_path(1)):
+		return
+	var f_old := FileAccess.open(LEGACY_SAVE_PATH, FileAccess.READ)
+	if f_old == null:
+		return
+	var txt := f_old.get_as_text()
+	f_old.close()
+	var f_new := FileAccess.open(slot_path(1), FileAccess.WRITE)
+	if f_new == null:
+		return
+	f_new.store_string(txt)
+	f_new.close()
+	if ddir and ddir.file_exists("profile.save"):
+		ddir.remove("profile.save")
+
+
+func has_any_saved_world() -> bool:
+	for i in range(1, MAX_WORLDS + 1):
+		if FileAccess.file_exists(slot_path(i)):
+			return true
+	return false
+
+
+func is_slot_occupied(slot: int) -> bool:
+	return FileAccess.file_exists(slot_path(clampi(slot, 1, MAX_WORLDS)))
+
+
+func get_first_free_slot() -> int:
+	for i in range(1, MAX_WORLDS + 1):
+		if not FileAccess.file_exists(slot_path(i)):
+			return i
+	return 0
+
+
+func delete_slot(slot: int) -> void:
+	var fname := "world_%d.save" % clampi(slot, 1, MAX_WORLDS)
+	var da := DirAccess.open("user://")
+	if da and da.file_exists(fname):
+		da.remove(fname)
+
+
+## Краткое описание слота для меню (без загрузки в автозагрузки квестов).
+func get_slot_preview(slot: int) -> Dictionary:
+	var s := clampi(slot, 1, MAX_WORLDS)
+	var out: Dictionary = {
+		"slot": s,
+		"occupied": false,
+		"mode": Mode.NONE,
+		"mode_name": "—",
+		"mama": 0,
+	}
+	if not FileAccess.file_exists(slot_path(s)):
+		return out
+	var f := FileAccess.open(slot_path(s), FileAccess.READ)
+	if f == null:
+		return out
+	var txt := f.get_as_text()
+	f.close()
+	var jp := JSON.new()
+	if jp.parse(txt) != OK:
+		out["occupied"] = true
+		out["mode_name"] = "ошибка файла"
+		return out
+	var root = jp.data
+	if typeof(root) != TYPE_DICTIONARY:
+		return out
+	var d: Dictionary = root
+	if int(d.get("version", 0)) != SAVE_VERSION:
+		out["occupied"] = true
+		out["mode_name"] = "старая версия"
+		return out
+	out["occupied"] = true
+	var mode_raw := int(d.get("mode", Mode.SURVIVAL))
+	var mode_clamped := clampi(mode_raw, Mode.NONE, Mode.PEACEFUL)
+	out["mode"] = mode_clamped
+	out["mode_name"] = mode_display_name(mode_clamped as Mode)
+	var g = d.get("game", {})
+	if typeof(g) == TYPE_DICTIONARY:
+		out["mama"] = int(g.get("mama_tokens", 0))
+	return out
+
+
+func mode_display_name(m: Mode) -> String:
+	match m:
+		Mode.HARDCORE:
+			return "Хардкор"
+		Mode.SURVIVAL:
+			return "Выживание"
+		Mode.CREATIVE:
+			return "Креатив"
+		Mode.PEACEFUL:
+			return "Мирный"
+		_:
+			return "—"
 
 
 func has_save_file() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return has_any_saved_world()
 
 
-func start_new_game(mode: Mode) -> void:
+func start_new_game(mode: Mode, into_slot: int) -> void:
+	var slot := clampi(into_slot, 1, MAX_WORLDS)
+	current_slot = slot
 	current_mode = mode
 	reset_world_state()
 	save_to_disk(null)
@@ -32,9 +152,10 @@ func start_new_game(mode: Mode) -> void:
 		tree.change_scene_to_file(MAIN_SCENE)
 
 
-func continue_game() -> void:
-	if not load_from_disk():
-		push_warning("GameSave: не удалось загрузить сохранение.")
+func continue_game(from_slot: int) -> void:
+	var slot := clampi(from_slot, 1, MAX_WORLDS)
+	if not load_from_slot(slot):
+		push_warning("GameSave: не удалось загрузить мир %d." % slot)
 		return
 	var tree := get_tree()
 	if tree:
@@ -60,9 +181,10 @@ func get_mansion_spawn() -> Vector3:
 func save_to_disk(player: Node3D) -> void:
 	var payload := _build_payload(player)
 	var json := JSON.stringify(payload)
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var path := slot_path(current_slot)
+	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
-		push_warning("GameSave: запись %s не удалась." % SAVE_PATH)
+		push_warning("GameSave: запись %s не удалась." % path)
 		return
 	f.store_string(json)
 	f.close()
@@ -83,10 +205,12 @@ func autosave_if_playing(player: Node3D) -> void:
 	save_to_disk(player)
 
 
-func load_from_disk() -> bool:
-	if not has_save_file():
+func load_from_slot(slot: int) -> bool:
+	var s := clampi(slot, 1, MAX_WORLDS)
+	if not FileAccess.file_exists(slot_path(s)):
 		return false
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	current_slot = s
+	var f := FileAccess.open(slot_path(s), FileAccess.READ)
 	if f == null:
 		return false
 	var txt := f.get_as_text()
