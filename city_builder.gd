@@ -240,6 +240,7 @@ func _build_village(spec: Dictionary) -> void:
 	var gap_cx: float = lay["gap_cx"]
 	var xmin: float = lay["xmin"]
 	var xmax: float = lay["xmax"]
+	var z_inner: float = z1 - 4.2
 	_add_box_static(
 		"VwN_%d" % spec["village_id"],
 		Vector3((x0 + x1) * 0.5, h * 0.5, z0 - t * 0.5),
@@ -346,7 +347,6 @@ func _build_village(spec: Dictionary) -> void:
 		if olbl:
 			olbl.text = "Внешние ворота — E\n(в деревне)"
 
-	var z_inner := z1 - 4.2
 	var inner := INNER_GATE_SCENE.instantiate() as StaticBody3D
 	if inner:
 		inner.flag_key = inner_key
