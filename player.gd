@@ -218,6 +218,9 @@ var _shop_open: bool = false
 ## Магазин открыт из зоны киоска на карте (при выходе из зоны закроется).
 var _shop_from_world_zone: bool = false
 var _shop_layer: CanvasLayer = null
+var _world_map_layer: CanvasLayer = null
+var _world_map_rt: RichTextLabel = null
+var _world_map_visible: bool = false
 var _grapple_state: GrappleState = GrappleState.INACTIVE
 var _grapple_target: Node3D = null
 var _grapple_enemy: Node3D = null
@@ -312,6 +315,7 @@ func _ready() -> void:
 	call_deferred("_setup_hp_ui")
 	call_deferred("_setup_shop_ui")
 	call_deferred("_ensure_pause_ui")
+	call_deferred("_setup_world_map_ui")
 	if not GameProgress.mama_changed.is_connected(_on_mama_or_upgrades_changed):
 		GameProgress.mama_changed.connect(_on_mama_or_upgrades_changed)
 	if not GameProgress.upgrades_changed.is_connected(_on_mama_or_upgrades_changed):
@@ -344,6 +348,8 @@ func _restore_mouse_capture_after_focus() -> void:
 		return
 	if _shop_open:
 		return
+	if _world_map_visible:
+		return
 	if _pause_visible:
 		return
 	if _want_mouse_captured:
@@ -364,6 +370,7 @@ func _process(_delta: float) -> void:
 	# Таймеры и UI крутятся всегда, иначе при видимом курсоре оружие/перезарядка замирают.
 	if (
 		not _shop_open
+		and not _world_map_visible
 		and not _pause_visible
 		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 		and _want_mouse_captured
@@ -712,6 +719,8 @@ func _update_hp_ui() -> void:
 func _on_mama_or_upgrades_changed(_arg = null) -> void:
 	_update_hp_ui()
 	_refresh_shop_buttons()
+	if _world_map_visible:
+		_refresh_world_map_content()
 
 
 func _setup_shop_ui() -> void:
@@ -743,7 +752,7 @@ func _setup_shop_ui() -> void:
 	margin.add_child(outer)
 	var title := Label.new()
 	title.name = "ShopTitle"
-	title.text = "МАГАЗИН — валюта: жетоны МАМА (M / киоск на краю, Esc — закрыть)"
+		title.text = "МАГАЗИН — валюта: жетоны МАМА (Tab / киоск на краю, Esc — закрыть)"
 	outer.add_child(title)
 	var info := Label.new()
 	info.name = "ShopInfo"
@@ -993,6 +1002,10 @@ func notify_world_shop_zone(inside: bool) -> void:
 
 
 func _toggle_shop() -> void:
+	if not _shop_open and _world_map_visible:
+		_world_map_visible = false
+		if _world_map_layer != null:
+			_world_map_layer.visible = false
 	_shop_open = not _shop_open
 	if _shop_layer:
 		_shop_layer.visible = _shop_open
@@ -1004,6 +1017,65 @@ func _toggle_shop() -> void:
 		_want_mouse_captured = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_center_mouse_in_viewport()
+
+
+func _setup_world_map_ui() -> void:
+	if _world_map_layer != null:
+		return
+	_world_map_layer = CanvasLayer.new()
+	_world_map_layer.layer = 103
+	_world_map_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	_world_map_layer.visible = false
+	add_child(_world_map_layer)
+	var root := ColorRect.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.color = Color(0.06, 0.07, 0.09, 0.94)
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	_world_map_layer.add_child(root)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_top", 24)
+	margin.add_theme_constant_override("margin_bottom", 24)
+	root.add_child(margin)
+	var sc := ScrollContainer.new()
+	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(sc)
+	var rt := RichTextLabel.new()
+	rt.bbcode_enabled = true
+	rt.fit_content = true
+	rt.scroll_active = false
+	rt.custom_minimum_size = Vector2(820, 80)
+	rt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(rt)
+	_world_map_rt = rt
+
+
+func _refresh_world_map_content() -> void:
+	if _world_map_rt == null:
+		return
+	_world_map_rt.text = CityQuests.get_world_map_bbcode()
+
+
+func _toggle_world_map() -> void:
+	if _shop_open:
+		_toggle_shop()
+	if _world_map_layer == null:
+		_setup_world_map_ui()
+	_world_map_visible = not _world_map_visible
+	if _world_map_layer != null:
+		_world_map_layer.visible = _world_map_visible
+	if _world_map_visible:
+		_refresh_world_map_content()
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_want_mouse_captured = false
+	else:
+		if not _shop_open and not _pause_visible and not _death_visible:
+			_want_mouse_captured = true
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			_center_mouse_in_viewport()
 
 
 func take_damage(amount: int, source: String = "") -> void:
@@ -1136,6 +1208,10 @@ func _ensure_death_ui() -> void:
 
 
 func _show_death_screen() -> void:
+	if _world_map_visible:
+		_world_map_visible = false
+		if _world_map_layer != null:
+			_world_map_layer.visible = false
 	_ensure_death_ui()
 	_death_visible = true
 	_death_ui_input_locked = true
@@ -1378,7 +1454,7 @@ func _pause_controls_help_text() -> String:
 		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
 		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
-		+ "H — обрез; M — магазин\n"
+		+ "H — обрез; M — карта заданий; Tab — магазин\n"
 		+ "6 — бросить динамит (покупается в лавке за МАМА)\n"
 		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
 		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
@@ -1815,6 +1891,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k := event as InputEventKey
 		esc = k.pressed and not k.echo and (k.keycode == KEY_ESCAPE or k.physical_keycode == KEY_ESCAPE)
 	if event.is_action_pressed("ui_cancel") or esc:
+		if _world_map_visible:
+			_toggle_world_map()
+			get_viewport().set_input_as_handled()
+			return
 		if _death_visible:
 			if _death_ui_input_locked:
 				if not _pause_visible:
@@ -1839,6 +1919,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if _is_driving_van():
 			if event.keycode == KEY_M and _world_actions_input_ok():
+				_toggle_world_map()
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == KEY_TAB and _world_actions_input_ok():
 				_toggle_shop()
 				get_viewport().set_input_as_handled()
 				return
@@ -2011,6 +2095,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_stasis()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_M and _world_actions_input_ok():
+			_toggle_world_map()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_TAB and _world_actions_input_ok():
 			_toggle_shop()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_H and _world_actions_input_ok():

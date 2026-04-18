@@ -16,6 +16,7 @@ const GATE_SCENE := preload("res://puzzle_gate_door.tscn")
 func _ready() -> void:
 	_build_north_passage_and_puzzle()
 	_build_plaza_and_houses()
+	_build_village_walls_and_gateway()
 	_spawn_quest_npcs()
 	_register_npc_village_exclusion_zone()
 
@@ -55,6 +56,68 @@ func _roof_mat() -> StandardMaterial3D:
 	return m
 
 
+func _wall_mat() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.4, 0.38, 0.36, 1)
+	m.roughness = 0.9
+	return m
+
+
+## Общая геометрия ограды и проёма ворот (юг), чтобы стена, плита и puzzle_gate совпадали.
+func _village_wall_layout() -> Dictionary:
+	var total_x := float(grid_w) * cell_size
+	var total_z := float(grid_h) * cell_size
+	var x0 := grid_origin.x - 1.0
+	var x1 := grid_origin.x + total_x + 1.0
+	var z0 := grid_origin.z - 1.0
+	var z1 := grid_origin.z + total_z + 1.0
+	var h := 4.0
+	var t := 0.55
+	var gap_cx := (x0 + x1) * 0.5 + 2.0
+	var gap_w := 6.2
+	var xmin := gap_cx - gap_w * 0.5
+	var xmax := gap_cx + gap_w * 0.5
+	return {
+		"x0": x0,
+		"x1": x1,
+		"z0": z0,
+		"z1": z1,
+		"h": h,
+		"t": t,
+		"gap_cx": gap_cx,
+		"gap_w": gap_w,
+		"xmin": xmin,
+		"xmax": xmax,
+	}
+
+
+func _build_village_walls_and_gateway() -> void:
+	var lay := _village_wall_layout()
+	var x0: float = lay["x0"]
+	var x1: float = lay["x1"]
+	var z0: float = lay["z0"]
+	var z1: float = lay["z1"]
+	var h: float = lay["h"]
+	var t: float = lay["t"]
+	var wm := _wall_mat()
+	var gap_cx: float = lay["gap_cx"]
+	var xmin: float = lay["xmin"]
+	var xmax: float = lay["xmax"]
+	_add_box_static("VillageWallN", Vector3((x0 + x1) * 0.5, h * 0.5, z0 - t * 0.5), Vector3(x1 - x0 + 2.0 * t, h, t), wm)
+	_add_box_static("VillageWallW", Vector3(x0 - t * 0.5, h * 0.5, (z0 + z1) * 0.5), Vector3(t, h, z1 - z0 + 2.0 * t), wm)
+	_add_box_static("VillageWallE", Vector3(x1 + t * 0.5, h * 0.5, (z0 + z1) * 0.5), Vector3(t, h, z1 - z0 + 2.0 * t), wm)
+	var w_left := xmin - x0
+	if w_left > 0.8:
+		_add_box_static("VillageWallS_L", Vector3(x0 + w_left * 0.5, h * 0.5, z1 + t * 0.5), Vector3(w_left, h, t), wm)
+	var w_right := x1 - xmax
+	if w_right > 0.8:
+		_add_box_static("VillageWallS_R", Vector3(xmax + w_right * 0.5, h * 0.5, z1 + t * 0.5), Vector3(w_right, h, t), wm)
+	_add_box_static("VillageGatePostL", Vector3(xmin - 0.48, h * 0.55, z1 + t * 0.5), Vector3(0.82, h * 1.12, 0.82), wm)
+	_add_box_static("VillageGatePostR", Vector3(xmax + 0.48, h * 0.55, z1 + t * 0.5), Vector3(0.82, h * 1.12, 0.82), wm)
+	var beam_w := xmax - xmin + 1.2
+	_add_box_static("VillageGateLintel", Vector3((xmin + xmax) * 0.5, h * 1.12 + 0.35, z1 + t * 0.5), Vector3(beam_w, 0.55, 0.75), wm)
+
+
 func _add_box_static(name: String, pos: Vector3, size: Vector3, mat: Material) -> void:
 	var body := StaticBody3D.new()
 	body.name = name
@@ -75,6 +138,10 @@ func _add_box_static(name: String, pos: Vector3, size: Vector3, mat: Material) -
 
 func _build_north_passage_and_puzzle() -> void:
 	var mat := _plaza_mat()
+	var lay := _village_wall_layout()
+	var gap_cx: float = lay["gap_cx"]
+	var z1: float = lay["z1"]
+	var t: float = lay["t"]
 	# Дорога от двора особняка к воротам.
 	_add_box_static("CityRoadSouth", Vector3(14.0, 0.08, -18.0), Vector3(32.0, 0.18, 16.0), mat)
 	_add_box_static("CityRoadNorth", Vector3(46.0, 0.08, -36.0), Vector3(48.0, 0.18, 28.0), mat)
@@ -82,19 +149,29 @@ func _build_north_passage_and_puzzle() -> void:
 	var plate := PLATE_SCENE.instantiate() as Area3D
 	if plate:
 		plate.flag_key = "suburbs_plate"
+		plate.extra_flag_keys = ["village_entry_unlocked"]
 		add_child(plate)
-		plate.global_position = Vector3(22.0, 0.12, -19.0)
+		# Южнее проёма в стене — на подходе к деревне.
+		plate.global_position = Vector3(gap_cx, 0.12, z1 + t + 2.75)
+		var plbl := Label3D.new()
+		plbl.text = "ПЛИТА\n(шагни сюда)"
+		plbl.font_size = 22
+		plbl.outline_size = 8
+		plbl.modulate = Color(0.95, 0.95, 1.0)
+		plbl.position = Vector3(0.0, 0.72, 0.0)
+		plbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		plate.add_child(plbl)
 
 	var gate := GATE_SCENE.instantiate() as StaticBody3D
 	if gate:
 		add_child(gate)
-		gate.global_position = Vector3(36.5, 0.0, -30.0)
+		gate.global_position = Vector3(gap_cx, 0.0, z1 + t * 0.5)
 
 	var lever := LEVER_SCENE.instantiate() as StaticBody3D
 	if lever:
 		lever.flag_key = "suburbs_lever"
 		add_child(lever)
-		lever.global_position = Vector3(52.0, 0.05, -28.0)
+		lever.global_position = Vector3(gap_cx + 5.5, 0.05, z1 + t + 1.15)
 
 
 func _build_plaza_and_houses() -> void:

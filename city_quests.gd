@@ -29,6 +29,9 @@ func on_npc_interact(idx: int, player: Node) -> void:
 		return
 	if idx < 0 or idx > 2:
 		return
+	if idx == 0 and not _completed[0] and not GameProgress.has_puzzle_flag("village_entry_unlocked"):
+		_player_banner(player, "Сначала наступи на плиту у ворот (смотри карту — клав. M).")
+		return
 	if _completed[idx]:
 		_player_banner(player, "Спасибо, ты нас выручил!")
 		return
@@ -53,6 +56,7 @@ func on_npc_interact(idx: int, player: Node) -> void:
 					player,
 					"Задание: собери ещё %d жетонов МАМА (с дропа врагов). Потом снова E." % MAMA_NEED[idx]
 				)
+		GameProgress.upgrades_changed.emit()
 		return
 
 	if not _is_quest_progress_ok(idx):
@@ -126,3 +130,45 @@ func _spawn_final_boss_deferred() -> void:
 		boss.set("player_path", boss.get_path_to(pl))
 	final_boss_spawned = true
 	_player_banner(pl, "ФИНАЛ: Божья отвёртка! 20 ударов, бомбы с неба. (Вертолёт — в разработке.)")
+
+
+func get_world_map_bbcode() -> String:
+	var t := ""
+	t += "[font_size=22][b]КАРТА И ЗАДАНИЯ[/b][/font_size]\n"
+	t += "[i]M — закрыть карту. Лавка жетонов — Tab или киоск на краю карты. Esc — сначала закроет карту.[/i]\n\n"
+	t += "[b]Ориентиры[/b]\n"
+	t += "• [color=#deb887]Особняк[/color] — центр арены (деревянный пол, въезд с юга).\n"
+	t += "• [color=#8fbc8f]Деревня NPC[/color] — за [b]каменной стеной[/b]; в стене есть [b]проход с воротами[/b] (плита и рычаг снаружи).\n"
+	t += "• [color=#dda0dd]Киоск[/color] магазина — восточный сектор (~ x≈16, z≈12).\n"
+	t += "• [color=#aaa]Фургон[/color] — обычно у южного выхода из особняка.\n\n"
+	t += "[b]Плита для первого жителя[/b]\n"
+	if GameProgress.has_puzzle_flag("village_entry_unlocked"):
+		t += "  [color=#90ee90]✓ Готово — можно говорить с жителем №1 (синий, задание «враги»).[/color]\n\n"
+	else:
+		t += (
+			"  [color=#ffcc66]![/color] Подойди к [b]зелёной плите[/b] у подъезда к деревне (надпись «ПЛИТА») и [b]наступи[/b] на неё.\n\n"
+		)
+	t += "[b]Внешние ворота (головоломка)[/b]\n"
+	t += "  1) Та же плита активирует механизм.\n"
+	if GameProgress.has_puzzle_flag("suburbs_plate"):
+		t += "     [color=#90ee90]✓ Плита нажата[/color]\n"
+	else:
+		t += "     Плита ещё не нажата.\n"
+	t += "  2) [b]Рычаг[/b] — нажми E, глядя на рычаг у дороги.\n"
+	if GameProgress.has_puzzle_flag("suburbs_lever"):
+		t += "     [color=#90ee90]✓ Рычаг[/color]\n"
+	else:
+		t += "     Рычаг ещё не переключён.\n"
+	t += "  Когда оба пункта готовы — [b]блок у ворот[/b] уберётся.\n\n"
+	t += "[b]Жители (E)[/b]\n"
+	var qn := ["№1 — убить врагов", "№2 — открыть ворота (см. выше)", "№3 — собрать жетоны МАМА"]
+	for i in range(3):
+		if _completed[i]:
+			t += "  [color=#888]%s — выполнено[/color]\n" % qn[i]
+		elif _accepted[i]:
+			t += "  [color=#ffcc66]%s — в процессе[/color]\n" % qn[i]
+		else:
+			t += "  %s\n" % qn[i]
+	if final_boss_spawned:
+		t += "\n[color=#ff8888]Финальный босс уже в мире.[/color]\n"
+	return t
