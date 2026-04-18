@@ -731,9 +731,12 @@ func _update_hp_ui() -> void:
 				_gun_label.text = "АНИМАТРОН: готов (ЛКМ — чёрная воронка)"
 		elif _equipped == EquippedGun.CREATIVE_WAND:
 			if _creative_wand_cd > 0.0:
-				_gun_label.text = "КРЕАТИВНАЯ ПАЛОЧКА: пауза %.1fs" % _creative_wand_cd
+				_gun_label.text = "КРЕАТИВНАЯ ПАЛОЧКА: пауза %.1fs  |  6 — убрать" % _creative_wand_cd
 			else:
-				_gun_label.text = "КРЕАТИВНАЯ ПАЛОЧКА: ЛКМ — все враги + %d МАМА" % GameProgress.CREATIVE_WAND_MAMA_GRANT
+				_gun_label.text = (
+					"КРЕАТИВНАЯ ПАЛОЧКА: ЛКМ — все враги + %d МАМА  |  6 — убрать"
+					% GameProgress.CREATIVE_WAND_MAMA_GRANT
+				)
 		else:
 			_gun_label.text = ""
 	if _mama_hud:
@@ -1643,7 +1646,7 @@ func _pause_controls_help_text() -> String:
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
 		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
 		+ "H — обрез; M — карта (колёсико — масштаб сверху, P — скрыть текст); Tab — магазин\n"
-		+ "6 — бросить динамит (покупается в лавке за МАМА)\n"
+		+ "6 — бросить динамит (лавка); в режиме «Креатив» — креативная палочка (ещё раз 6 — убрать)\n"
 		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
 		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
 		+ "Esc — пауза\n"
@@ -1904,8 +1907,6 @@ func _cycle_weapon(step: int) -> void:
 		EquippedGun.ANIMATRON,
 		EquippedGun.KATANA,
 	]
-	if GameSave.is_creative():
-		guns.append(EquippedGun.CREATIVE_WAND)
 	var idx := guns.find(_equipped)
 	if idx < 0:
 		idx = 0
@@ -2195,23 +2196,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			_update_hp_ui()
 			get_viewport().set_input_as_handled()
 		elif (
-			(event.keycode == KEY_0 or event.physical_keycode == KEY_0)
-			and _world_actions_input_ok()
-			and GameSave.is_creative()
-		):
-			if _equipped == EquippedGun.CREATIVE_WAND:
-				_equipped = EquippedGun.NONE
-			else:
-				_equipped = EquippedGun.CREATIVE_WAND
-			_update_weapon_visibility()
-			_update_hp_ui()
-			get_viewport().set_input_as_handled()
-		elif (
 			(event.keycode == KEY_6 or event.physical_keycode == KEY_6)
 			and _world_actions_input_ok()
 			and not _is_driving_van()
 		):
-			_throw_dynamite()
+			if GameSave.is_creative():
+				if _equipped == EquippedGun.CREATIVE_WAND:
+					_equipped = EquippedGun.NONE
+				else:
+					_equipped = EquippedGun.CREATIVE_WAND
+				_update_weapon_visibility()
+				_update_hp_ui()
+			else:
+				_throw_dynamite()
 			get_viewport().set_input_as_handled()
 		if (
 			(event.keycode == KEY_C or event.physical_keycode == KEY_C)
