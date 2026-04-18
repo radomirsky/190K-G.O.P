@@ -63,6 +63,53 @@ func has_puzzle_flag(key: String) -> bool:
 	return bool(puzzle_flags.get(key, false))
 
 
+## Прямоугольник деревни NPC на плоскости XZ (враги не спавнятся и не заходят).
+var npc_village_bounds_valid: bool = false
+var npc_village_x_min: float = 0.0
+var npc_village_x_max: float = -1.0
+var npc_village_z_min: float = 0.0
+var npc_village_z_max: float = -1.0
+
+
+func register_npc_village_xz(x0: float, x1: float, z0: float, z1: float) -> void:
+	npc_village_x_min = minf(x0, x1)
+	npc_village_x_max = maxf(x0, x1)
+	npc_village_z_min = minf(z0, z1)
+	npc_village_z_max = maxf(z0, z1)
+	npc_village_bounds_valid = true
+
+
+func is_pos_in_npc_village_xz(pos: Vector3) -> bool:
+	if not npc_village_bounds_valid:
+		return false
+	return (
+		pos.x >= npc_village_x_min
+		and pos.x <= npc_village_x_max
+		and pos.z >= npc_village_z_min
+		and pos.z <= npc_village_z_max
+	)
+
+
+func push_pos_out_of_npc_village(pos: Vector3, margin: float = 0.45) -> Vector3:
+	if not npc_village_bounds_valid or not is_pos_in_npc_village_xz(pos):
+		return pos
+	var dl := pos.x - npc_village_x_min
+	var dr := npc_village_x_max - pos.x
+	var db := pos.z - npc_village_z_min
+	var df := npc_village_z_max - pos.z
+	var m := minf(minf(dl, dr), minf(db, df))
+	var out := pos
+	if m == dl:
+		out.x = npc_village_x_min - margin
+	elif m == dr:
+		out.x = npc_village_x_max + margin
+	elif m == db:
+		out.z = npc_village_z_min - margin
+	else:
+		out.z = npc_village_z_max + margin
+	return out
+
+
 func on_regular_enemy_died(world_pos: Vector3) -> void:
 	regular_kills += 1
 	kills_changed.emit(regular_kills)

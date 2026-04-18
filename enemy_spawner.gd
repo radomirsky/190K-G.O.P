@@ -49,9 +49,17 @@ func _on_boss_spawn_requested() -> void:
 	if flat.length_squared() < 0.001:
 		flat = Vector3(0.0, 0.0, -1.0)
 	flat = flat.normalized() * 11.0
-	var want := _player.global_position + flat + Vector3(0.0, spawn_height, 0.0)
-	var base := _snap_to_floor(want)
-	b.global_position = base + Vector3.UP * spawn_height
+	for attempt in range(18):
+		var ang := float(attempt) * TAU / 18.0
+		var dir := Vector3(cos(ang), 0.0, sin(ang)) * 11.0
+		var want := _player.global_position + dir + Vector3(0.0, spawn_height, 0.0)
+		var base := _snap_to_floor(want)
+		var pos := base + Vector3.UP * spawn_height
+		if not GameProgress.is_pos_in_npc_village_xz(pos):
+			b.global_position = pos
+			return
+	var fb := _snap_to_floor(Vector3(-14.0, 0.0, 10.0) + Vector3(0.0, spawn_height, 0.0))
+	b.global_position = fb + Vector3.UP * spawn_height
 
 
 func _process(delta: float) -> void:
@@ -98,12 +106,19 @@ func _spawn_enemy() -> void:
 	if e.has_method("set"):
 		e.set("player_path", get_path_to(_player))
 
-	var r := randf_range(spawn_radius_min, spawn_radius_max)
-	var a := randf_range(0.0, TAU)
-	var off := Vector3(cos(a) * r, 0.0, sin(a) * r)
-	var want := _player.global_position + off + Vector3(0.0, spawn_height, 0.0)
-	var base := _snap_to_floor(want)
-	e.global_position = base + Vector3.UP * spawn_height
+	for _attempt in range(36):
+		var r := randf_range(spawn_radius_min, spawn_radius_max)
+		var a := randf_range(0.0, TAU)
+		var off := Vector3(cos(a) * r, 0.0, sin(a) * r)
+		var want := _player.global_position + off + Vector3(0.0, spawn_height, 0.0)
+		var base := _snap_to_floor(want)
+		var pos := base + Vector3.UP * spawn_height
+		if GameProgress.is_pos_in_npc_village_xz(pos) or GameProgress.is_pos_in_npc_village_xz(base):
+			continue
+		e.global_position = pos
+		return
+	var fb2 := _snap_to_floor(Vector3(-14.0, 0.0, 10.0) + Vector3(0.0, spawn_height, 0.0))
+	e.global_position = fb2 + Vector3.UP * spawn_height
 
 
 func _snap_to_floor(want_pos: Vector3) -> Vector3:

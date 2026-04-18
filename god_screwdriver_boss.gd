@@ -104,6 +104,12 @@ func _physics_process(delta: float) -> void:
 			velocity = to_v * (hover_speed / maxf(d, 0.1))
 
 	move_and_slide()
+	if GameProgress.npc_village_bounds_valid:
+		var pushed := GameProgress.push_pos_out_of_npc_village(global_position, 0.55)
+		if pushed.distance_squared_to(global_position) > 0.0004:
+			global_position = pushed
+			velocity.x = 0.0
+			velocity.z = 0.0
 
 	_bomb_tick -= delta
 	if _bomb_tick <= 0.0 and _player != null and is_instance_valid(_player):

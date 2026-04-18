@@ -17,6 +17,21 @@ func _ready() -> void:
 	_build_north_passage_and_puzzle()
 	_build_plaza_and_houses()
 	_spawn_quest_npcs()
+	_register_npc_village_exclusion_zone()
+
+
+func _register_npc_village_exclusion_zone() -> void:
+	var pad := 4.0
+	var min_x := grid_origin.x - pad
+	var max_x := grid_origin.x + float(grid_w) * cell_size + pad
+	var min_z := grid_origin.z - pad
+	var max_z := grid_origin.z + float(grid_h) * cell_size + pad
+	# Дороги и головоломка у ворот (южный и северный отрезки).
+	min_x = minf(min_x, -2.0)
+	max_x = maxf(max_x, 76.0)
+	min_z = minf(min_z, -54.0)
+	max_z = maxf(max_z, -5.0)
+	GameProgress.register_npc_village_xz(min_x, max_x, min_z, max_z)
 
 
 func _plaza_mat() -> StandardMaterial3D:

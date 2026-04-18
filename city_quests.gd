@@ -15,7 +15,6 @@ var _accepted: Array[bool] = [false, false, false]
 var _completed: Array[bool] = [false, false, false]
 var _kills_at_accept: Array[int] = [-1, -1, -1]
 var _mama_at_accept: Array[int] = [-1, -1, -1]
-var _active_idx: int = -1
 var final_boss_spawned: bool = false
 
 
@@ -30,16 +29,12 @@ func on_npc_interact(idx: int, player: Node) -> void:
 		return
 	if idx < 0 or idx > 2:
 		return
-	if idx > 0 and not _completed[idx - 1]:
-		_player_banner(player, "Сначала помоги предыдущему жителю (задание %d)." % idx)
-		return
 	if _completed[idx]:
 		_player_banner(player, "Спасибо, ты нас выручил!")
 		return
 
 	if not _accepted[idx]:
 		_accepted[idx] = true
-		_active_idx = idx
 		match QUEST_TYPES[idx]:
 			QUEST_TYPE_KILL:
 				_kills_at_accept[idx] = GameProgress.regular_kills
@@ -60,16 +55,12 @@ func on_npc_interact(idx: int, player: Node) -> void:
 				)
 		return
 
-	if _active_idx != idx:
-		_active_idx = idx
-
 	if not _is_quest_progress_ok(idx):
 		_player_banner(player, _progress_hint(idx))
 		return
 
 	GameProgress.add_mama(REWARD_MAMA[idx])
 	_completed[idx] = true
-	_active_idx = -1
 	_player_banner(player, "Сделано! Награда: +%d МАМА." % REWARD_MAMA[idx])
 
 	if _completed[0] and _completed[1] and _completed[2]:

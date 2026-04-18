@@ -224,6 +224,12 @@ func _physics_process(delta: float) -> void:
 				velocity.z = lerpf(velocity.z, target_xz.z, steer)
 
 	move_and_slide()
+	if GameProgress.npc_village_bounds_valid:
+		var pushed := GameProgress.push_pos_out_of_npc_village(global_position, 0.45)
+		if pushed.distance_squared_to(global_position) > 0.0004:
+			global_position = pushed
+			velocity.x = 0.0
+			velocity.z = 0.0
 
 
 func _update_attack_anim_visual() -> void:
