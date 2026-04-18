@@ -188,7 +188,7 @@ func _physics_process(delta: float) -> void:
 		if fwd.length_squared() > 0.0001:
 			fwd = fwd.normalized()
 		var spd := velocity.dot(fwd)
-		var motor_ok := _fuel > 0.001
+		var motor_ok := _fuel > 0.001 or GameSave.is_creative()
 		if motor_ok and Input.is_physical_key_pressed(KEY_W):
 			spd = move_toward(spd, max_speed, accel * delta)
 		elif motor_ok and Input.is_physical_key_pressed(KEY_S):
@@ -205,10 +205,13 @@ func _physics_process(delta: float) -> void:
 		rotate_y(turn * turn_speed * delta)
 		move_and_slide()
 		var hspd := Vector3(velocity.x, 0.0, velocity.z).length()
-		var drain := fuel_drain_idle
-		if hspd > 0.35 or Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_S):
-			drain += fuel_drain_moving * clampf(hspd / max_speed, 0.25, 1.0)
-		_fuel = maxf(_fuel - drain * delta, 0.0)
+		if GameSave.is_creative():
+			_fuel = fuel_max
+		else:
+			var drain := fuel_drain_idle
+			if hspd > 0.35 or Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_S):
+				drain += fuel_drain_moving * clampf(hspd / max_speed, 0.25, 1.0)
+			_fuel = maxf(_fuel - drain * delta, 0.0)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, brake * delta)
 		velocity.z = move_toward(velocity.z, 0.0, brake * delta)

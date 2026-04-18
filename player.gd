@@ -18,7 +18,6 @@ const _STASIS_GUN_LOCAL_POS := Vector3(-0.28, -0.2, -0.52)
 const _SAWED_GUN_LOCAL_POS := Vector3(0.22, -0.21, -0.48)
 const _ANIMATRON_MODEL_LOCAL_POS := Vector3(-0.02, -0.23, -0.62)
 const _CREATIVE_WAND_LOCAL_POS := Vector3(0.34, -0.19, -0.58)
-const CREATIVE_WAND_FIRE_COOLDOWN_SEC := 1.15
 const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 	Vector3(-0.35, 0.5, 0),
 	Vector3(0.35, 0.5, 0),
@@ -177,7 +176,6 @@ var _katana_parry_flash_t: float = 0.0
 var _katana_blade_mat: StandardMaterial3D = null
 var _katana_lunge_cd: float = 0.0
 var _creative_wand_node: Node3D = null
-var _creative_wand_cd: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -441,7 +439,6 @@ func _process(_delta: float) -> void:
 	_katana_parry_cd = maxf(_katana_parry_cd - _delta, 0.0)
 	_katana_parry_flash_t = maxf(_katana_parry_flash_t - _delta, 0.0)
 	_katana_lunge_cd = maxf(_katana_lunge_cd - _delta, 0.0)
-	_creative_wand_cd = maxf(_creative_wand_cd - _delta, 0.0)
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -589,13 +586,10 @@ func _process(_delta: float) -> void:
 		_ensure_creative_wand_nodes()
 		if _creative_wand_node:
 			var tw := float(Time.get_ticks_msec()) / 1000.0
-			var wk := 0.0
-			if _creative_wand_cd > 0.0:
-				wk = clampf(_creative_wand_cd / maxf(CREATIVE_WAND_FIRE_COOLDOWN_SEC, 0.01), 0.0, 1.0)
 			_creative_wand_node.rotation = Vector3(
 				sin(tw * 7.0) * 0.07,
 				sin(tw * 5.0) * 0.1,
-				sin(tw * 9.0) * 0.05 * wk
+				sin(tw * 9.0) * 0.05
 			)
 			_creative_wand_node.position = (
 				_CREATIVE_WAND_LOCAL_POS + Vector3(0.0, sin(tw * 11.0) * 0.018, 0.0)
@@ -730,13 +724,10 @@ func _update_hp_ui() -> void:
 			else:
 				_gun_label.text = "АНИМАТРОН: готов (ЛКМ — чёрная воронка)"
 		elif _equipped == EquippedGun.CREATIVE_WAND:
-			if _creative_wand_cd > 0.0:
-				_gun_label.text = "КРЕАТИВНАЯ ПАЛОЧКА: пауза %.1fs  |  6 — убрать" % _creative_wand_cd
-			else:
-				_gun_label.text = (
-					"КРЕАТИВНАЯ ПАЛОЧКА: ЛКМ — все враги + %d МАМА  |  6 — убрать"
-					% GameProgress.CREATIVE_WAND_MAMA_GRANT
-				)
+			_gun_label.text = (
+				"КРЕАТИВНАЯ ПАЛОЧКА: ЛКМ — все враги + %d МАМА  |  6 — убрать"
+				% GameProgress.CREATIVE_WAND_MAMA_GRANT
+			)
 		else:
 			_gun_label.text = ""
 	if _mama_hud:
@@ -2069,7 +2060,7 @@ func _input(event: InputEvent) -> void:
 				_katana_cd = maxf(0.08, katana_cooldown_sec * kspd)
 				get_viewport().set_input_as_handled()
 				return
-			if _equipped == EquippedGun.CREATIVE_WAND and GameSave.is_creative() and _creative_wand_cd <= 0.0:
+			if _equipped == EquippedGun.CREATIVE_WAND and GameSave.is_creative():
 				_fire_creative_wand()
 				get_viewport().set_input_as_handled()
 				return
@@ -2483,7 +2474,6 @@ func _fire_creative_wand() -> void:
 		elif n.has_method("creative_wand_kill"):
 			n.call("creative_wand_kill")
 	GameProgress.add_mama(GameProgress.CREATIVE_WAND_MAMA_GRANT)
-	_creative_wand_cd = CREATIVE_WAND_FIRE_COOLDOWN_SEC
 	notify_quest_banner(
 		"Креативная палочка: враги сняты. +%d МАМА." % GameProgress.CREATIVE_WAND_MAMA_GRANT
 	)
