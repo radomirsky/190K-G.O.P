@@ -649,7 +649,10 @@ func notify_quest_banner(text: String) -> void:
 
 func _update_hp_ui() -> void:
 	if _hp_label:
-		_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
+		if GameSave.is_creative():
+			_hp_label.text = "Креатив — без урона"
+		else:
+			_hp_label.text = "HP: %d/%d" % [_hp, max_hp]
 	if _gun_label:
 		if _is_driving_van():
 			if GameProgress.van_turrets_installed and not GameProgress.van_destroyed:
@@ -1202,6 +1205,8 @@ func _toggle_world_map() -> void:
 
 func take_damage(amount: int, source: String = "") -> void:
 	if amount <= 0:
+		return
+	if GameSave.is_creative():
 		return
 	if _world_map_visible:
 		return

@@ -213,6 +213,8 @@ func _progress_hint(idx: int) -> String:
 
 
 func _spawn_final_boss_deferred() -> void:
+	if GameSave.is_peaceful():
+		return
 	if final_boss_spawned:
 		return
 	var tree := get_tree()

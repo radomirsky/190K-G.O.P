@@ -5,9 +5,17 @@ extends Node
 const SAVE_PATH := "user://profile.save"
 const SAVE_VERSION := 1
 const MAIN_SCENE := "res://main.tscn"
-enum Mode { NONE, HARDCORE, SURVIVAL }
+enum Mode { NONE, HARDCORE, SURVIVAL, CREATIVE, PEACEFUL }
 
 var current_mode: Mode = Mode.NONE
+
+
+func is_creative() -> bool:
+	return current_mode == Mode.CREATIVE
+
+
+func is_peaceful() -> bool:
+	return current_mode == Mode.PEACEFUL
 var _pending_player: Dictionary = {}
 
 
@@ -93,7 +101,7 @@ func load_from_disk() -> bool:
 	if int(d.get("version", 0)) != SAVE_VERSION:
 		return false
 	var mode_raw := int(d.get("mode", Mode.SURVIVAL))
-	current_mode = clampi(mode_raw, Mode.NONE, Mode.SURVIVAL) as Mode
+	current_mode = clampi(mode_raw, Mode.NONE, Mode.PEACEFUL) as Mode
 	var g = d.get("game", {})
 	if typeof(g) == TYPE_DICTIONARY:
 		GameProgress.apply_persistent_state(g)

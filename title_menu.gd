@@ -7,6 +7,8 @@ extends Control
 @onready var _mode_panel: PanelContainer = $ModePanel
 @onready var _btn_hardcore: Button = $ModePanel/CenterMode/ModeVBox/BtnHardcore
 @onready var _btn_survival: Button = $ModePanel/CenterMode/ModeVBox/BtnSurvival
+@onready var _btn_creative: Button = $ModePanel/CenterMode/ModeVBox/BtnCreative
+@onready var _btn_peaceful: Button = $ModePanel/CenterMode/ModeVBox/BtnPeaceful
 @onready var _btn_mode_back: Button = $ModePanel/CenterMode/ModeVBox/BtnBack
 
 
@@ -40,6 +42,14 @@ func _on_hardcore() -> void:
 
 func _on_survival() -> void:
 	GameSave.start_new_game(GameSave.Mode.SURVIVAL)
+
+
+func _on_creative() -> void:
+	GameSave.start_new_game(GameSave.Mode.CREATIVE)
+
+
+func _on_peaceful() -> void:
+	GameSave.start_new_game(GameSave.Mode.PEACEFUL)
 
 
 func _on_mode_back() -> void:

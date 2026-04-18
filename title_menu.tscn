@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://bqj8titlemenu01"]
+[gd_scene format=3 uid="uid://bxit3m4ara021"]
 
 [ext_resource type="Script" path="res://title_menu.gd" id="1"]
 
@@ -84,6 +84,16 @@ text = "Хардкор — смерть сбрасывает весь прогр
 custom_minimum_size = Vector2(380, 42)
 layout_mode = 2
 text = "Выживание — респавн в особняке, МАМА выпадают"
+
+[node name="BtnCreative" type="Button" parent="ModePanel/CenterMode/ModeVBox"]
+custom_minimum_size = Vector2(380, 42)
+layout_mode = 2
+text = "Креатив — без урона и HP"
+
+[node name="BtnPeaceful" type="Button" parent="ModePanel/CenterMode/ModeVBox"]
+custom_minimum_size = Vector2(380, 42)
+layout_mode = 2
+text = "Мирный — враги не появляются"
 
 [node name="BtnBack" type="Button" parent="ModePanel/CenterMode/ModeVBox"]
 custom_minimum_size = Vector2(380, 36)

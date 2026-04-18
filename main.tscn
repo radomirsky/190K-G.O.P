@@ -1,6 +1,7 @@
-[gd_scene load_steps=13 format=3 uid="uid://cfmf2gvwovbox"]
+[gd_scene load_steps=14 format=3 uid="uid://cfmf2gvwovbox"]
 
 [ext_resource type="Script" uid="uid://ccxh1c7bxjs0h" path="res://player.gd" id="1_player"]
+[ext_resource type="Script" path="res://main_root.gd" id="11_main_root"]
 [ext_resource type="Script" path="res://throwable_break.gd" id="3_throw_break"]
 [ext_resource type="PackedScene" uid="uid://d0o6y1j1nauqa" path="res://enemy.tscn" id="4_enemy"]
 [ext_resource type="Script" path="res://enemy_spawner.gd" id="5_enemy_spawner"]
@@ -25,6 +26,7 @@ radius = 0.35
 height = 1.05
 
 [node name="Main" type="Node3D"]
+script = ExtResource("11_main_root")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_main")

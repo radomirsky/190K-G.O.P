@@ -20,12 +20,17 @@ var _spawn_count: int = 0
 
 func _ready() -> void:
 	_player = get_node_or_null(player_path) as Node3D
+	if GameSave.is_peaceful():
+		set_process(false)
+		return
 	if not GameProgress.boss_spawn_requested.is_connected(_on_boss_spawn_requested):
 		GameProgress.boss_spawn_requested.connect(_on_boss_spawn_requested)
 	randomize()
 
 
 func _on_boss_spawn_requested() -> void:
+	if GameSave.is_peaceful():
+		return
 	if enemy_scene == null:
 		return
 	if _player == null or not is_instance_valid(_player):
@@ -64,6 +69,8 @@ func _on_boss_spawn_requested() -> void:
 
 func _process(delta: float) -> void:
 	if not is_inside_tree():
+		return
+	if GameSave.is_peaceful():
 		return
 	if GameProgress.world_time_frozen:
 		return
