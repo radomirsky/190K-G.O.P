@@ -13,6 +13,7 @@ func _ready() -> void:
 	_build_courtyard()
 	_build_perimeter()
 	_build_keep()
+	_build_throne()
 	_spawn_king()
 	_spawn_guards()
 	_spawn_king_puzzles()
@@ -60,8 +61,20 @@ func _build_perimeter() -> void:
 	var m := _stone_mat(false)
 	_add_box(self, c + Vector3(0.0, y, -hz - t * 0.5), Vector3(hx * 2.0 + 2.0 * t, h, t), m)
 	_add_box(self, c + Vector3(0.0, y, hz + t * 0.5), Vector3(hx * 2.0 + 2.0 * t, h, t), m)
-	_add_box(self, c + Vector3(-hx - t * 0.5, y, 0.0), Vector3(t, h, hz * 2.0 + 2.0 * t), m)
-	_add_box(self, c + Vector3(hx + t * 0.5, y, 0.0), Vector3(t, h, hz * 2.0 + 2.0 * t), m)
+	# Западная стена — проход к королевству (со стороны арены, −X).
+	var depth: float = hz * 2.0 + 2.0 * t
+	var passage_w: float = 9.0
+	var seg_z: float = (depth - passage_w) * 0.5
+	var wx: float = c.x - hx - t * 0.5
+	var z_n: float = c.z - (depth + passage_w) * 0.25
+	var z_s: float = c.z + (depth + passage_w) * 0.25
+	_add_box(self, Vector3(wx, y, z_n), Vector3(t, h, seg_z), m)
+	_add_box(self, Vector3(wx, y, z_s), Vector3(t, h, seg_z), m)
+	_add_box(self, c + Vector3(hx + t * 0.5, y, 0.0), Vector3(t, h, depth), m)
+	# Подъезд к воротам (к проходу в западной стене).
+	var road_m := _stone_mat(true)
+	road_m.albedo_color = Color(0.34, 0.33, 0.36, 1)
+	_add_box(self, c + Vector3(-hx - 18.0, 0.09, 0.0), Vector3(52.0, 0.2, 14.0), road_m)
 
 
 func _keep_center() -> Vector3:
@@ -100,6 +113,22 @@ func _build_keep() -> void:
 	_add_box(self, kc + Vector3(0.0, th * 0.5 + 0.26, -1.4), Vector3(8.8, th, 7.8), m)
 
 
+func _build_throne() -> void:
+	var kc := _keep_center()
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(0.72, 0.58, 0.22, 1)
+	gold.metallic = 0.55
+	gold.roughness = 0.42
+	var base := kc + Vector3(0.0, 0.0, -4.35)
+	_add_box(self, base + Vector3(0.0, 0.38, 0.0), Vector3(1.85, 0.45, 1.45), gold)
+	_add_box(self, base + Vector3(0.0, 1.12, -0.68), Vector3(1.95, 1.5, 0.42), gold)
+	var arm := StandardMaterial3D.new()
+	arm.albedo_color = Color(0.55, 0.42, 0.18, 1)
+	arm.metallic = 0.5
+	_add_box(self, base + Vector3(-0.95, 0.62, 0.05), Vector3(0.35, 0.35, 1.15), arm)
+	_add_box(self, base + Vector3(0.95, 0.62, 0.05), Vector3(0.35, 0.35, 1.15), arm)
+
+
 func _spawn_king() -> void:
 	var k := StaticBody3D.new()
 	k.name = "King"
@@ -107,22 +136,23 @@ func _spawn_king() -> void:
 	k.collision_layer = 1
 	k.collision_mask = 1
 	var shp := CapsuleShape3D.new()
-	shp.radius = 0.38
-	shp.height = 1.5
+	shp.radius = 0.36
+	shp.height = 1.05
 	var cs := CollisionShape3D.new()
 	cs.shape = shp
-	cs.position = Vector3(0.0, 0.78, 0.0)
+	cs.position = Vector3(0.0, 0.58, 0.12)
 	k.add_child(cs)
 	var body := MeshInstance3D.new()
 	var cm := CapsuleMesh.new()
-	cm.radius = 0.35
-	cm.height = 1.45
+	cm.radius = 0.33
+	cm.height = 1.05
 	body.mesh = cm
 	var robe := StandardMaterial3D.new()
 	robe.albedo_color = Color(0.75, 0.2, 0.25, 1)
 	robe.roughness = 0.65
 	body.set_surface_override_material(0, robe)
-	body.position = Vector3(0.0, 0.76, 0.0)
+	body.position = Vector3(0.0, 0.58, 0.1)
+	body.rotation_degrees = Vector3(-22.0, 0.0, 0.0)
 	k.add_child(body)
 	var crown := MeshInstance3D.new()
 	var tor := TorusMesh.new()
@@ -134,19 +164,20 @@ func _spawn_king() -> void:
 	gold.metallic = 0.92
 	gold.roughness = 0.22
 	crown.set_surface_override_material(0, gold)
-	crown.position = Vector3(0.0, 1.52, 0.0)
+	crown.position = Vector3(0.0, 1.12, 0.02)
 	crown.rotation_degrees = Vector3(90.0, 0.0, 0.0)
 	k.add_child(crown)
 	var lbl := Label3D.new()
 	lbl.text = "Король — E"
 	lbl.font_size = 22
 	lbl.outline_size = 7
-	lbl.position = Vector3(0.0, 2.15, 0.0)
+	lbl.position = Vector3(0.0, 1.65, 0.0)
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	k.add_child(lbl)
 	add_child(k)
 	var kc := _keep_center()
-	k.global_position = kc + Vector3(0.0, 0.06, -2.9)
+	k.global_position = kc + Vector3(0.0, 0.52, -4.32)
+	k.rotation_degrees.y = 180.0
 
 
 func _spawn_guards() -> void:
@@ -289,8 +320,15 @@ func _add_labels() -> void:
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.global_position = courtyard_origin + Vector3(0.0, 14.0, 0.0)
 	add_child(l)
+	var gate_l := Label3D.new()
+	gate_l.text = "ПРОХОД\nв королевство"
+	gate_l.font_size = 20
+	gate_l.outline_size = 7
+	gate_l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	gate_l.global_position = courtyard_origin + Vector3(-22.0 - 12.0, 8.5, 0.0)
+	add_child(gate_l)
 	GameProgress.expand_npc_village_xz(
-		courtyard_origin.x - 28.0,
+		courtyard_origin.x - 52.0,
 		courtyard_origin.x + 28.0,
 		courtyard_origin.z - 24.0,
 		courtyard_origin.z + 24.0
