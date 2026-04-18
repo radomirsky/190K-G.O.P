@@ -137,6 +137,8 @@ func _build_village_inner_gate_and_lever() -> void:
 		lever_in.flag_key = "village_inner_gate_closed"
 		lever_in.one_shot = false
 		lever_in.toggle_flag_on_interact = true
+		lever_in.banner_text_when_flag_on = "Внутренние ворота закрыты.\nСубтитры — DimaTorzok"
+		lever_in.banner_text_when_flag_off = "Внутренние ворота открыты.\nСубтитры — DimaTorzok"
 		add_child(lever_in)
 		lever_in.global_position = Vector3(gap_cx + 3.2, 0.05, z_inner - 1.1)
 		var lbl := lever_in.get_node_or_null("Label3D") as Label3D

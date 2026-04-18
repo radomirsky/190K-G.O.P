@@ -5,6 +5,9 @@ extends StaticBody3D
 @export var one_shot: bool = true
 ## Если true и one_shot == false: каждое E снимает/ставит флаг (например внутренние ворота).
 @export var toggle_flag_on_interact: bool = false
+## Субтитры внизу экрана (тот же Label, что у жителей — notify_quest_banner), после переключения.
+@export var banner_text_when_flag_on: String = ""
+@export var banner_text_when_flag_off: String = ""
 
 var _pulled: bool = false
 
@@ -20,12 +23,22 @@ func interact(_player: Node) -> void:
 	if one_shot:
 		_pulled = true
 		GameProgress.set_puzzle_flag(flag_key, true)
+		_emit_subtitle_banner(_player, banner_text_when_flag_on)
 	elif toggle_flag_on_interact:
 		var on := not GameProgress.has_puzzle_flag(flag_key)
 		GameProgress.set_puzzle_flag(flag_key, on)
+		_emit_subtitle_banner(_player, banner_text_when_flag_on if on else banner_text_when_flag_off)
 	else:
 		GameProgress.set_puzzle_flag(flag_key, true)
+		_emit_subtitle_banner(_player, banner_text_when_flag_on)
 	_apply_handle_from_flag()
+
+
+func _emit_subtitle_banner(player: Node, text: String) -> void:
+	if text == "":
+		return
+	if player != null and is_instance_valid(player) and player.has_method("notify_quest_banner"):
+		player.call("notify_quest_banner", text)
 
 
 func _apply_handle_from_flag() -> void:
