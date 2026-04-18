@@ -221,6 +221,10 @@ var _shop_layer: CanvasLayer = null
 var _world_map_layer: CanvasLayer = null
 var _world_map_rt: RichTextLabel = null
 var _world_map_subviewport: SubViewport = null
+var _world_map_hint_label: Label = null
+var _world_map_hints_scroll: ScrollContainer = null
+## На карте: P скрывает/показывает верхнюю подпись и текст заданий (вид сверху остаётся).
+var _world_map_hints_collapsed: bool = false
 var _world_map_visible: bool = false
 var _grapple_state: GrappleState = GrappleState.INACTIVE
 var _grapple_target: Node3D = null
@@ -1050,10 +1054,17 @@ func _setup_world_map_ui() -> void:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
+	var strip := Label.new()
+	strip.text = "M / Esc — закрыть карту. P — скрыть или показать блок подсказок и заданий (вид сверху не гасится)."
+	strip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	strip.add_theme_color_override("font_color", Color(0.72, 0.82, 0.95, 0.98))
+	vbox.add_child(strip)
 	var map_hint := Label.new()
-	map_hint.text = "Вид сверху (игра на паузе, урон отключён)"
+	map_hint.text = "Вид сверху: игра на паузе, урон отключён."
+	map_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	map_hint.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0, 0.95))
 	vbox.add_child(map_hint)
+	_world_map_hint_label = map_hint
 	var vpc := SubViewportContainer.new()
 	vpc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vpc.stretch = true
@@ -1088,6 +1099,23 @@ func _setup_world_map_ui() -> void:
 	rt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.add_child(rt)
 	_world_map_rt = rt
+	_world_map_hints_scroll = sc
+	_world_map_hints_collapsed = false
+	_apply_world_map_hints_visibility()
+
+
+func _apply_world_map_hints_visibility() -> void:
+	if _world_map_hint_label != null:
+		_world_map_hint_label.visible = not _world_map_hints_collapsed
+	if _world_map_hints_scroll != null:
+		_world_map_hints_scroll.visible = not _world_map_hints_collapsed
+
+
+func _toggle_world_map_hints() -> void:
+	if not _world_map_visible:
+		return
+	_world_map_hints_collapsed = not _world_map_hints_collapsed
+	_apply_world_map_hints_visibility()
 
 
 func _refresh_world_map_content() -> void:
@@ -1125,6 +1153,8 @@ func _toggle_world_map() -> void:
 	if _world_map_layer != null:
 		_world_map_layer.visible = _world_map_visible
 	if _world_map_visible:
+		_world_map_hints_collapsed = false
+		_apply_world_map_hints_visibility()
 		_refresh_world_map_content()
 		_world_map_start_3d_preview()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1514,7 +1544,7 @@ func _pause_controls_help_text() -> String:
 		+ "R — перезарядка; Shift+R — кинуть пирамидку\n"
 		+ "Q / Ctrl+Q — очистка мира; Shift+Q — куб\n"
 		+ "F — стазис; G — пистолет; Shift+G — клей кубов\n"
-		+ "H — обрез; M — карта заданий; Tab — магазин\n"
+		+ "H — обрез; M — карта заданий (на карте P — скрыть/показать подсказки); Tab — магазин\n"
 		+ "6 — бросить динамит (покупается в лавке за МАМА)\n"
 		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
 		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
@@ -4019,6 +4049,11 @@ class WorldMapOverlayRoot extends ColorRect:
 			return
 		if event is InputEventKey and event.pressed and not event.echo:
 			var k := event as InputEventKey
+			if k.keycode == KEY_P or k.physical_keycode == KEY_P:
+				if player_node != null and is_instance_valid(player_node) and player_node.has_method("_toggle_world_map_hints"):
+					player_node.call("_toggle_world_map_hints")
+					get_viewport().set_input_as_handled()
+				return
 			if (
 				k.keycode == KEY_M
 				or k.physical_keycode == KEY_M
