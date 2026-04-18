@@ -8,12 +8,14 @@ extends CharacterBody3D
 @export var mob_touch_damage: int = 6
 @export var mob_touch_distance: float = 1.82
 @export var mob_attack_cooldown_sec: float = 0.5
+@export_range(0.08, 0.6, 0.01) var mob_attack_anim_sec: float = 0.26
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 var _hp: int = 14
 var _dead: bool = false
 var _angry: bool = false
 var _mob_atk_cd: float = 0.0
+var _mob_atk_anim_t: float = 0.0
 
 
 func _ready() -> void:
@@ -79,12 +81,14 @@ func _physics_process(delta: float) -> void:
 		velocity.z = 0.0
 		velocity.y -= gravity * delta
 		move_and_slide()
+		_update_mob_katana_swing(delta)
 		return
 	if pl == null:
 		velocity.y -= gravity * delta
 		velocity.x = 0.0
 		velocity.z = 0.0
 		move_and_slide()
+		_update_mob_katana_swing(delta)
 		return
 	var to_p: Vector3 = pl.global_position - global_position
 	to_p.y = 0.0
@@ -100,6 +104,23 @@ func _physics_process(delta: float) -> void:
 	velocity.y -= gravity * delta
 	move_and_slide()
 	_try_mob_hit_player(pl)
+	_update_mob_katana_swing(delta)
+
+
+func _update_mob_katana_swing(delta: float) -> void:
+	if not _angry:
+		return
+	var kat := get_node_or_null("MobKatana") as Node3D
+	if kat == null:
+		return
+	if _mob_atk_anim_t <= 0.0:
+		kat.rotation_degrees = Vector3.ZERO
+		return
+	_mob_atk_anim_t = maxf(_mob_atk_anim_t - delta, 0.0)
+	var dur := maxf(mob_attack_anim_sec, 0.04)
+	var u := 1.0 - (_mob_atk_anim_t / dur)
+	var w := sin(u * PI)
+	kat.rotation_degrees = Vector3(-58.0 * w, 0.0, -42.0 * w)
 
 
 func _resolve_player() -> Node3D:
@@ -117,6 +138,7 @@ func _try_mob_hit_player(pl: Node3D) -> void:
 		return
 	if pl.has_method("take_damage"):
 		_mob_atk_cd = mob_attack_cooldown_sec
+		_mob_atk_anim_t = mob_attack_anim_sec
 		pl.call("take_damage", mob_touch_damage, "enemy")
 
 
