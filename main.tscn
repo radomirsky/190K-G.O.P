@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://cfmf2gvwovbox"]
+[gd_scene load_steps=13 format=3 uid="uid://cfmf2gvwovbox"]
 
 [ext_resource type="Script" uid="uid://ccxh1c7bxjs0h" path="res://player.gd" id="1_player"]
 [ext_resource type="Script" path="res://throwable_break.gd" id="3_throw_break"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://mansion_builder.gd" id="7_mansion"]
 [ext_resource type="PackedScene" uid="uid://drivablevan01" path="res://drivable_van.tscn" id="8_van"]
 [ext_resource type="Script" path="res://city_builder.gd" id="9_city"]
+[ext_resource type="Script" path="res://kingdom_builder.gd" id="10_kingdom"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -38,6 +39,9 @@ script = ExtResource("7_mansion")
 
 [node name="City" type="Node3D" parent="."]
 script = ExtResource("9_city")
+
+[node name="Kingdom" type="Node3D" parent="."]
+script = ExtResource("10_kingdom")
 
 [node name="Cube" type="RigidBody3D" parent="." groups=["throwable"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.55, -7)

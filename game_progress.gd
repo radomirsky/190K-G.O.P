@@ -30,6 +30,8 @@ const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
 var regular_kills: int = 0
+## Жители деревень, убитые игроком (для поручений короля).
+var villager_kills: int = 0
 ## Последний порог убийств, на котором уже был запрошен босс (10, 20, 30…).
 var last_boss_kills_milestone: int = 0
 ## Остановка времени (Shift+Z): враги и снаряды замирают, скорости сохраняются до снятия.
@@ -93,6 +95,21 @@ func register_npc_village_xz(x0: float, x1: float, z0: float, z1: float) -> void
 	npc_village_bounds_valid = true
 
 
+## Расширить зону деревень (несколько посёлков на одной карте).
+func expand_npc_village_xz(x0: float, x1: float, z0: float, z1: float) -> void:
+	var nx0 := minf(x0, x1)
+	var nx1 := maxf(x0, x1)
+	var nz0 := minf(z0, z1)
+	var nz1 := maxf(z0, z1)
+	if not npc_village_bounds_valid:
+		register_npc_village_xz(nx0, nx1, nz0, nz1)
+		return
+	npc_village_x_min = minf(npc_village_x_min, nx0)
+	npc_village_x_max = maxf(npc_village_x_max, nx1)
+	npc_village_z_min = minf(npc_village_z_min, nz0)
+	npc_village_z_max = maxf(npc_village_z_max, nz1)
+
+
 func is_pos_in_npc_village_xz(pos: Vector3) -> bool:
 	if not npc_village_bounds_valid:
 		return false
@@ -122,6 +139,11 @@ func push_pos_out_of_npc_village(pos: Vector3, margin: float = 0.45) -> Vector3:
 	else:
 		out.z = npc_village_z_max + margin
 	return out
+
+
+func register_villager_kill_by_player() -> void:
+	villager_kills += 1
+	upgrades_changed.emit()
 
 
 func on_regular_enemy_died(world_pos: Vector3) -> void:

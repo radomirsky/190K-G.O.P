@@ -1,0 +1,33 @@
+[gd_scene load_steps=4 format=3 uid="uid://villageoutergate01"]
+
+[ext_resource type="Script" path="res://village_outer_gate.gd" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gate"]
+size = Vector3(5.2, 2.65, 0.55)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gate"]
+size = Vector3(5.15, 2.6, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gate"]
+albedo_color = Color(0.42, 0.32, 0.22, 1)
+roughness = 0.78
+
+[node name="VillageOuterGate" type="StaticBody3D"]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.32, 0)
+shape = SubResource("BoxShape3D_gate")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.32, 0)
+mesh = SubResource("BoxMesh_gate")
+surface_material_override/0 = SubResource("StandardMaterial3D_gate")
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.85, 0.35)
+billboard = 1
+font_size = 18
+text = "Плита и рычаг снаружи"

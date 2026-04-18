@@ -2,6 +2,7 @@ extends StaticBody3D
 ## Дверной проём дома в деревне: E — ограбить один раз, деревня злится (больше врагов).
 
 @export var house_id: String = "0_0"
+@export var village_id: int = 0
 
 var _robbed: bool = false
 
@@ -21,9 +22,9 @@ func interact(player: Node) -> void:
 	GameProgress.register_village_robbery()
 	var mob := false
 	if player != null and is_instance_valid(player):
-		mob = CityQuests.robbery_triggers_villager_mob(self, player)
+		mob = CityQuests.robbery_triggers_villager_mob(self, player, village_id)
 		if mob:
-			CityQuests.alert_all_villagers_katana_mob()
+			CityQuests.alert_all_villagers_katana_mob(village_id)
 	if player != null and is_instance_valid(player) and player.has_method("notify_quest_banner"):
 		if mob:
 			player.call(

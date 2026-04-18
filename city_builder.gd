@@ -1,114 +1,134 @@
 extends Node3D
-## Город севернее особняка (не на паркете): дома, площадь, проход с головоломкой (плита + рычаг + ворота).
+## Три деревни на карте: у каждой свои плита/рычаг, внешние ворота (перекрываются рычагом после головоломки) и внутренние ворота.
 
 const QUEST_NPC_SCENE := preload("res://quest_npc.tscn")
 const WORLD_SHOP_SCENE := preload("res://world_shop.tscn")
 const VILLAGE_HOUSE_DOOR_SCRIPT := preload("res://village_house_door.gd")
 const PLATE_SCENE := preload("res://puzzle_pressure_plate.tscn")
 const LEVER_SCENE := preload("res://puzzle_lever.tscn")
-const GATE_SCENE := preload("res://puzzle_gate_door.tscn")
+const OUTER_GATE_SCENE := preload("res://village_outer_gate.tscn")
 const INNER_GATE_SCENE := preload("res://village_inner_gate.tscn")
 
-## Левый нижний угол сетки домов (мир): вся сетка севернее особняка (z < ~-22).
-@export var grid_origin: Vector3 = Vector3(44.0, 0.0, -80.0)
-@export var cell_size: float = 9.5
-@export var grid_w: int = 5
-@export var grid_h: int = 6
+const CELL: float = 9.5
+
+var _village_specs: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	_build_north_passage_and_puzzle()
-	_build_plaza_and_houses()
-	_build_village_walls_and_gateway()
-	_build_village_inner_gate_and_lever()
-	_spawn_quest_npcs()
-	_spawn_side_quest_npcs()
-	_spawn_village_shop()
-	_add_minimap_floating_labels()
-	_register_npc_village_exclusion_zone()
+	_init_specs()
+	for spec in _village_specs:
+		_build_village(spec)
+	_register_all_village_bounds()
 
 
-func _map_label_3d(text: String, world_pos: Vector3) -> void:
-	var l := Label3D.new()
-	l.text = text
-	l.font_size = 19
-	l.outline_size = 7
-	l.outline_modulate = Color(0.02, 0.02, 0.05, 0.9)
-	l.modulate = Color(1.0, 0.94, 0.78, 1.0)
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	add_child(l)
-	l.global_position = world_pos
+func _init_specs() -> void:
+	var side_off: Array[Vector3] = [
+		Vector3(-4.2, 0.05, 3.1),
+		Vector3(4.5, 0.05, 2.6),
+		Vector3(-3.8, 0.05, -2.9),
+		Vector3(3.9, 0.05, -3.4),
+		Vector3(0.2, 0.05, 5.5),
+		Vector3(-6.0, 0.05, 0.4),
+		Vector3(6.1, 0.05, -0.8),
+		Vector3(1.2, 0.05, -5.2),
+	]
+	_village_specs = [
+		{
+			"village_id": 0,
+			"grid_origin": Vector3(44.0, 0.0, -80.0),
+			"grid_w": 5,
+			"grid_h": 6,
+			"plaza_cell": Vector2i(2, 2),
+			"gap_cx_bias": 2.0,
+			"plate_key": "suburbs_plate",
+			"lever_key": "suburbs_lever",
+			"plate_extra": PackedStringArray(["village_entry_unlocked"]),
+			"gate_need": ["suburbs_plate", "suburbs_lever"],
+			"outer_closed_key": "village_outer_closed",
+			"inner_key": "village_inner_gate_closed",
+			"label": "ДЕРЕВНЯ I\nплощадь · лавка",
+			"has_shop": true,
+			"npc_mains": [
+				Vector3(-6.2, 0.05, -5.0),
+				Vector3(6.0, 0.05, -4.5),
+				Vector3(-0.5, 0.05, 6.2),
+			],
+			"npc_main_idx": [0, 1, 2],
+			"npc_side0": 3,
+			"side_off": side_off,
+			"roads":
+			[
+				{"pos": Vector3(14.0, 0.08, -18.0), "size": Vector3(32.0, 0.18, 16.0)},
+				{"pos": Vector3(46.0, 0.08, -36.0), "size": Vector3(48.0, 0.18, 28.0)},
+			],
+		},
+		{
+			"village_id": 1,
+			"grid_origin": Vector3(-82.0, 0.0, -58.0),
+			"grid_w": 4,
+			"grid_h": 5,
+			"plaza_cell": Vector2i(1, 2),
+			"gap_cx_bias": 0.0,
+			"plate_key": "village_west_plate",
+			"lever_key": "village_west_lever",
+			"plate_extra": PackedStringArray(),
+			"gate_need": ["village_west_plate", "village_west_lever"],
+			"outer_closed_key": "village_west_outer_closed",
+			"inner_key": "village_west_inner_closed",
+			"label": "ДЕРЕВНЯ II\nзапад",
+			"has_shop": false,
+			"npc_mains": [],
+			"npc_main_idx": [],
+			"npc_side0": 11,
+			"side_off": side_off,
+			"roads":
+			[
+				{"pos": Vector3(-48.0, 0.08, -24.0), "size": Vector3(52.0, 0.18, 18.0)},
+				{"pos": Vector3(-68.0, 0.08, -38.0), "size": Vector3(22.0, 0.18, 32.0)},
+			],
+		},
+		{
+			"village_id": 2,
+			"grid_origin": Vector3(62.0, 0.0, -132.0),
+			"grid_w": 5,
+			"grid_h": 5,
+			"plaza_cell": Vector2i(2, 2),
+			"gap_cx_bias": 1.0,
+			"plate_key": "village_far_plate",
+			"lever_key": "village_far_lever",
+			"plate_extra": PackedStringArray(),
+			"gate_need": ["village_far_plate", "village_far_lever"],
+			"outer_closed_key": "village_far_outer_closed",
+			"inner_key": "village_far_inner_closed",
+			"label": "ДЕРЕВНЯ III\nсевер",
+			"has_shop": false,
+			"npc_mains": [],
+			"npc_main_idx": [],
+			"npc_side0": 19,
+			"side_off": side_off,
+			"roads":
+			[
+				{"pos": Vector3(56.0, 0.08, -88.0), "size": Vector3(36.0, 0.18, 22.0)},
+				{"pos": Vector3(72.0, 0.08, -112.0), "size": Vector3(28.0, 0.18, 36.0)},
+			],
+		},
+	]
 
 
-## Подписи в мире — видны на 3D-карте (вид сверху).
-func _add_minimap_floating_labels() -> void:
-	var plaza := _plaza_cell_center()
-	_map_label_3d("ДЕРЕВНЯ\nплощадь · лавка\n· жители", plaza + Vector3(0.0, 16.5, 0.0))
-	var lay := _village_wall_layout()
-	var gap_cx: float = lay["gap_cx"]
-	var z1: float = lay["z1"]
-	var t: float = lay["t"]
-	_map_label_3d("ВНЕШНИЕ\nВОРОТА", Vector3(gap_cx, 11.0, z1 + t * 0.5))
-	_map_label_3d("ПЛИТА\nнаступи", Vector3(gap_cx, 9.5, z1 + t + 2.75))
-	_map_label_3d("РЫЧАГ\nснаружи · E", Vector3(gap_cx + 5.5, 9.5, z1 + t + 1.15))
-	var z_inner := z1 - 4.2
-	_map_label_3d("ВНУТР.\nВОРОТА", Vector3(gap_cx, 10.5, z_inner))
-	_map_label_3d("РЫЧАГ\nвнутри · E", Vector3(gap_cx + 3.2, 9.5, z_inner - 1.1))
-
-
-func _register_npc_village_exclusion_zone() -> void:
-	var pad := 4.0
-	var min_x := grid_origin.x - pad
-	var max_x := grid_origin.x + float(grid_w) * cell_size + pad
-	var min_z := grid_origin.z - pad
-	var max_z := grid_origin.z + float(grid_h) * cell_size + pad
-	# Дороги и головоломка у ворот (южный и северный отрезки).
-	min_x = minf(min_x, -2.0)
-	max_x = maxf(max_x, 76.0)
-	min_z = minf(min_z, -54.0)
-	max_z = maxf(max_z, -5.0)
-	GameProgress.register_npc_village_xz(min_x, max_x, min_z, max_z)
-
-
-func _plaza_mat() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.3, 0.31, 0.34, 1)
-	m.roughness = 0.92
-	return m
-
-
-func _house_mat() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.65 + randf() * 0.12, 0.52, 0.42, 1)
-	m.roughness = 0.88
-	return m
-
-
-func _roof_mat() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.36, 0.2, 0.16, 1)
-	m.roughness = 0.85
-	return m
-
-
-func _wall_mat() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.4, 0.38, 0.36, 1)
-	m.roughness = 0.9
-	return m
-
-
-## Общая геометрия ограды и проёма ворот (юг), чтобы стена, плита и puzzle_gate совпадали.
-func _village_wall_layout() -> Dictionary:
-	var total_x := float(grid_w) * cell_size
-	var total_z := float(grid_h) * cell_size
-	var x0 := grid_origin.x - 1.0
-	var x1 := grid_origin.x + total_x + 1.0
-	var z0 := grid_origin.z - 1.0
-	var z1 := grid_origin.z + total_z + 1.0
+func _layout(spec: Dictionary) -> Dictionary:
+	var gw: int = spec["grid_w"]
+	var gh: int = spec["grid_h"]
+	var go: Vector3 = spec["grid_origin"]
+	var total_x := float(gw) * CELL
+	var total_z := float(gh) * CELL
+	var x0 := go.x - 1.0
+	var x1 := go.x + total_x + 1.0
+	var z0 := go.z - 1.0
+	var z1 := go.z + total_z + 1.0
 	var h := 4.0
 	var t := 0.55
-	var gap_cx := (x0 + x1) * 0.5 + 2.0
+	var bias: float = float(spec.get("gap_cx_bias", 0.0))
+	var gap_cx := (x0 + x1) * 0.5 + bias
 	var gap_w := 6.2
 	var xmin := gap_cx - gap_w * 0.5
 	var xmax := gap_cx + gap_w * 0.5
@@ -126,57 +146,38 @@ func _village_wall_layout() -> Dictionary:
 	}
 
 
-func _build_village_walls_and_gateway() -> void:
-	var lay := _village_wall_layout()
-	var x0: float = lay["x0"]
-	var x1: float = lay["x1"]
-	var z0: float = lay["z0"]
-	var z1: float = lay["z1"]
-	var h: float = lay["h"]
-	var t: float = lay["t"]
-	var wm := _wall_mat()
-	var gap_cx: float = lay["gap_cx"]
-	var xmin: float = lay["xmin"]
-	var xmax: float = lay["xmax"]
-	_add_box_static("VillageWallN", Vector3((x0 + x1) * 0.5, h * 0.5, z0 - t * 0.5), Vector3(x1 - x0 + 2.0 * t, h, t), wm)
-	_add_box_static("VillageWallW", Vector3(x0 - t * 0.5, h * 0.5, (z0 + z1) * 0.5), Vector3(t, h, z1 - z0 + 2.0 * t), wm)
-	_add_box_static("VillageWallE", Vector3(x1 + t * 0.5, h * 0.5, (z0 + z1) * 0.5), Vector3(t, h, z1 - z0 + 2.0 * t), wm)
-	var w_left := xmin - x0
-	if w_left > 0.8:
-		_add_box_static("VillageWallS_L", Vector3(x0 + w_left * 0.5, h * 0.5, z1 + t * 0.5), Vector3(w_left, h, t), wm)
-	var w_right := x1 - xmax
-	if w_right > 0.8:
-		_add_box_static("VillageWallS_R", Vector3(xmax + w_right * 0.5, h * 0.5, z1 + t * 0.5), Vector3(w_right, h, t), wm)
-	_add_box_static("VillageGatePostL", Vector3(xmin - 0.48, h * 0.55, z1 + t * 0.5), Vector3(0.82, h * 1.12, 0.82), wm)
-	_add_box_static("VillageGatePostR", Vector3(xmax + 0.48, h * 0.55, z1 + t * 0.5), Vector3(0.82, h * 1.12, 0.82), wm)
-	var beam_w := xmax - xmin + 1.2
-	_add_box_static("VillageGateLintel", Vector3((xmin + xmax) * 0.5, h * 1.12 + 0.35, z1 + t * 0.5), Vector3(beam_w, 0.55, 0.75), wm)
+func _plaza_center(spec: Dictionary) -> Vector3:
+	var pc: Vector2i = spec["plaza_cell"]
+	var go: Vector3 = spec["grid_origin"]
+	return go + Vector3((float(pc.x) + 0.5) * CELL, 0.12, (float(pc.y) + 0.5) * CELL)
 
 
-## Внутри деревни: рычаг переключает вторую дверь в проходе (можно жать E сколько угодно).
-func _build_village_inner_gate_and_lever() -> void:
-	var lay := _village_wall_layout()
-	var gap_cx: float = lay["gap_cx"]
-	var z1: float = lay["z1"]
-	var t: float = lay["t"]
-	# Чуть севернее внешних ворот — в коридоре между стеной и площадью.
-	var z_inner := z1 - 4.2
-	var inner := INNER_GATE_SCENE.instantiate() as StaticBody3D
-	if inner:
-		add_child(inner)
-		inner.global_position = Vector3(gap_cx, 0.0, z_inner)
-	var lever_in := LEVER_SCENE.instantiate() as StaticBody3D
-	if lever_in:
-		lever_in.flag_key = "village_inner_gate_closed"
-		lever_in.one_shot = false
-		lever_in.toggle_flag_on_interact = true
-		lever_in.banner_text_when_flag_on = "Внутренние ворота закрыты.\nСубтитры — DimaTorzok"
-		lever_in.banner_text_when_flag_off = "Внутренние ворота открыты.\nСубтитры — DimaTorzok"
-		add_child(lever_in)
-		lever_in.global_position = Vector3(gap_cx + 3.2, 0.05, z_inner - 1.1)
-		var lbl := lever_in.get_node_or_null("Label3D") as Label3D
-		if lbl:
-			lbl.text = "Рычаг ворот — E\n(снова E — открыть)"
+func _wall_mat() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.4, 0.38, 0.36, 1)
+	m.roughness = 0.9
+	return m
+
+
+func _plaza_mat() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.3, 0.31, 0.34, 1)
+	m.roughness = 0.92
+	return m
+
+
+func _house_mat(rng: RandomNumberGenerator) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.65 + rng.randf() * 0.12, 0.52, 0.42, 1)
+	m.roughness = 0.88
+	return m
+
+
+func _roof_mat() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.36, 0.2, 0.16, 1)
+	m.roughness = 0.85
+	return m
 
 
 func _add_box_static(name: String, pos: Vector3, size: Vector3, mat: Material) -> void:
@@ -197,81 +198,255 @@ func _add_box_static(name: String, pos: Vector3, size: Vector3, mat: Material) -
 	body.add_child(sh)
 
 
-func _build_north_passage_and_puzzle() -> void:
-	var mat := _plaza_mat()
-	var lay := _village_wall_layout()
-	var gap_cx: float = lay["gap_cx"]
+func _map_label_3d(text: String, world_pos: Vector3) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.font_size = 19
+	l.outline_size = 7
+	l.outline_modulate = Color(0.02, 0.02, 0.05, 0.9)
+	l.modulate = Color(1.0, 0.94, 0.78, 1.0)
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	add_child(l)
+	l.global_position = world_pos
+
+
+func _register_all_village_bounds() -> void:
+	var pad := 5.0
+	for spec in _village_specs:
+		var go: Vector3 = spec["grid_origin"]
+		var gw: int = spec["grid_w"]
+		var gh: int = spec["grid_h"]
+		var min_x := go.x - pad
+		var max_x := go.x + float(gw) * CELL + pad
+		var min_z := go.z - pad
+		var max_z := go.z + float(gh) * CELL + pad
+		GameProgress.expand_npc_village_xz(min_x, max_x, min_z, max_z)
+	# Дороги и старый коридор к I деревне.
+	GameProgress.expand_npc_village_xz(-95.0, 92.0, -145.0, -4.0)
+
+
+func _build_village(spec: Dictionary) -> void:
+	var lay := _layout(spec)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(spec["village_id"]) + 202504
+	var wm := _wall_mat()
+	var x0: float = lay["x0"]
+	var x1: float = lay["x1"]
+	var z0: float = lay["z0"]
 	var z1: float = lay["z1"]
+	var h: float = lay["h"]
 	var t: float = lay["t"]
-	# Дорога от двора особняка к воротам.
-	_add_box_static("CityRoadSouth", Vector3(14.0, 0.08, -18.0), Vector3(32.0, 0.18, 16.0), mat)
-	_add_box_static("CityRoadNorth", Vector3(46.0, 0.08, -36.0), Vector3(48.0, 0.18, 28.0), mat)
+	var gap_cx: float = lay["gap_cx"]
+	var xmin: float = lay["xmin"]
+	var xmax: float = lay["xmax"]
+	_add_box_static(
+		"VwN_%d" % spec["village_id"],
+		Vector3((x0 + x1) * 0.5, h * 0.5, z0 - t * 0.5),
+		Vector3(x1 - x0 + 2.0 * t, h, t),
+		wm
+	)
+	_add_box_static(
+		"VwW_%d" % spec["village_id"],
+		Vector3(x0 - t * 0.5, h * 0.5, (z0 + z1) * 0.5),
+		Vector3(t, h, z1 - z0 + 2.0 * t),
+		wm
+	)
+	_add_box_static(
+		"VwE_%d" % spec["village_id"],
+		Vector3(x1 + t * 0.5, h * 0.5, (z0 + z1) * 0.5),
+		Vector3(t, h, z1 - z0 + 2.0 * t),
+		wm
+	)
+	var w_left := xmin - x0
+	if w_left > 0.8:
+		_add_box_static(
+			"VwSL_%d" % spec["village_id"],
+			Vector3(x0 + w_left * 0.5, h * 0.5, z1 + t * 0.5),
+			Vector3(w_left, h, t),
+			wm
+		)
+	var w_right := x1 - xmax
+	if w_right > 0.8:
+		_add_box_static(
+			"VwSR_%d" % spec["village_id"],
+			Vector3(xmax + w_right * 0.5, h * 0.5, z1 + t * 0.5),
+			Vector3(w_right, h, t),
+			wm
+		)
+	_add_box_static(
+		"VPostL_%d" % spec["village_id"],
+		Vector3(xmin - 0.48, h * 0.55, z1 + t * 0.5),
+		Vector3(0.82, h * 1.12, 0.82),
+		wm
+	)
+	_add_box_static(
+		"VPostR_%d" % spec["village_id"],
+		Vector3(xmax + 0.48, h * 0.55, z1 + t * 0.5),
+		Vector3(0.82, h * 1.12, 0.82),
+		wm
+	)
+	var beam_w := xmax - xmin + 1.2
+	_add_box_static(
+		"VLint_%d" % spec["village_id"],
+		Vector3((xmin + xmax) * 0.5, h * 1.12 + 0.35, z1 + t * 0.5),
+		Vector3(beam_w, 0.55, 0.75),
+		wm
+	)
+
+	var plate_key: String = spec["plate_key"]
+	var lever_key: String = spec["lever_key"]
+	var plate_extra: PackedStringArray = spec["plate_extra"]
+	var gate_need: Array = spec["gate_need"]
+	var outer_key: String = spec["outer_closed_key"]
+	var inner_key: String = spec["inner_key"]
 
 	var plate := PLATE_SCENE.instantiate() as Area3D
 	if plate:
-		plate.flag_key = "suburbs_plate"
-		plate.extra_flag_keys = PackedStringArray(["village_entry_unlocked"])
+		plate.flag_key = plate_key
+		plate.extra_flag_keys = plate_extra
 		add_child(plate)
-		# Южнее проёма в стене — на подходе к деревне.
 		plate.global_position = Vector3(gap_cx, 0.12, z1 + t + 2.75)
 		var plbl := Label3D.new()
-		plbl.text = "ПЛИТА\n(шагни сюда)"
-		plbl.font_size = 22
-		plbl.outline_size = 8
-		plbl.modulate = Color(0.95, 0.95, 1.0)
+		plbl.text = "ПЛИТА\n(шагни)"
+		plbl.font_size = 20
+		plbl.outline_size = 7
 		plbl.position = Vector3(0.0, 0.72, 0.0)
 		plbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		plate.add_child(plbl)
 
-	var gate := GATE_SCENE.instantiate() as StaticBody3D
-	if gate:
-		add_child(gate)
-		gate.global_position = Vector3(gap_cx, 0.0, z1 + t * 0.5)
+	var outer := OUTER_GATE_SCENE.instantiate() as StaticBody3D
+	if outer:
+		var need_arr: Array = []
+		for f in gate_need:
+			need_arr.append(str(f))
+		outer.need_flags = need_arr
+		outer.closed_toggle_flag = outer_key
+		add_child(outer)
+		outer.global_position = Vector3(gap_cx, 0.0, z1 + t * 0.5)
 
-	var lever := LEVER_SCENE.instantiate() as StaticBody3D
-	if lever:
-		lever.flag_key = "suburbs_lever"
-		add_child(lever)
-		lever.global_position = Vector3(gap_cx + 5.5, 0.05, z1 + t + 1.15)
+	var lever_out := LEVER_SCENE.instantiate() as StaticBody3D
+	if lever_out:
+		lever_out.flag_key = lever_key
+		lever_out.one_shot = true
+		add_child(lever_out)
+		lever_out.global_position = Vector3(gap_cx + 5.5, 0.05, z1 + t + 1.15)
 
+	var lever_outer_toggle := LEVER_SCENE.instantiate() as StaticBody3D
+	if lever_outer_toggle:
+		lever_outer_toggle.flag_key = outer_key
+		lever_outer_toggle.one_shot = false
+		lever_outer_toggle.toggle_flag_on_interact = true
+		lever_outer_toggle.banner_text_when_flag_on = "Внешние ворота закрыты."
+		lever_outer_toggle.banner_text_when_flag_off = "Внешние ворота открыты."
+		add_child(lever_outer_toggle)
+		lever_outer_toggle.global_position = Vector3(gap_cx - 4.8, 0.05, z1 + t + 1.0)
+		var olbl := lever_outer_toggle.get_node_or_null("Label3D") as Label3D
+		if olbl:
+			olbl.text = "Рычаг наружных ворот — E"
 
-func _build_plaza_and_houses() -> void:
-	var total_x := float(grid_w) * cell_size
-	var total_z := float(grid_h) * cell_size
-	var mid := grid_origin + Vector3(total_x * 0.5, 0.0, total_z * 0.5)
-	_add_box_static("CityPlaza", mid + Vector3(0.0, 0.1, 0.0), Vector3(total_x + 3.0, 0.22, total_z + 3.0), _plaza_mat())
+	var z_inner := z1 - 4.2
+	var inner := INNER_GATE_SCENE.instantiate() as StaticBody3D
+	if inner:
+		inner.flag_key = inner_key
+		add_child(inner)
+		inner.global_position = Vector3(gap_cx, 0.0, z_inner)
 
-	var plaza_cell := Vector2i(2, 2)
-	for gx in range(grid_w):
-		for gz in range(grid_h):
+	var lever_in := LEVER_SCENE.instantiate() as StaticBody3D
+	if lever_in:
+		lever_in.flag_key = inner_key
+		lever_in.one_shot = false
+		lever_in.toggle_flag_on_interact = true
+		lever_in.banner_text_when_flag_on = "Внутренние ворота закрыты."
+		lever_in.banner_text_when_flag_off = "Внутренние ворота открыты."
+		add_child(lever_in)
+		lever_in.global_position = Vector3(gap_cx + 3.2, 0.05, z_inner - 1.1)
+		var lbl := lever_in.get_node_or_null("Label3D") as Label3D
+		if lbl:
+			lbl.text = "Рычаг внутренних ворот — E"
+
+	var rid := 0
+	for rd in spec.get("roads", []):
+		_add_box_static("Road_%d_%d" % [spec["village_id"], rid], rd["pos"], rd["size"], _plaza_mat())
+		rid += 1
+
+	var gw: int = spec["grid_w"]
+	var gh: int = spec["grid_h"]
+	var go: Vector3 = spec["grid_origin"]
+	var total_x := float(gw) * CELL
+	var total_z := float(gh) * CELL
+	var mid := go + Vector3(total_x * 0.5, 0.0, total_z * 0.5)
+	_add_box_static("Plaza_%d" % spec["village_id"], mid + Vector3(0.0, 0.1, 0.0), Vector3(total_x + 3.0, 0.22, total_z + 3.0), _plaza_mat())
+
+	var plaza_cell: Vector2i = spec["plaza_cell"]
+	for gx in range(gw):
+		for gz in range(gh):
 			if gx == plaza_cell.x and gz == plaza_cell.y:
 				continue
-			var cell_c := grid_origin + Vector3((float(gx) + 0.5) * cell_size, 0.0, (float(gz) + 0.5) * cell_size)
-			var hw := cell_size * (0.34 + randf() * 0.06)
-			var hd := cell_size * (0.34 + randf() * 0.06)
-			var hh := 2.2 + randf() * 1.6
+			var cell_c := go + Vector3((float(gx) + 0.5) * CELL, 0.0, (float(gz) + 0.5) * CELL)
+			var hw := CELL * (0.34 + rng.randf() * 0.06)
+			var hd := CELL * (0.34 + rng.randf() * 0.06)
+			var hh := 2.2 + rng.randf() * 1.6
 			_add_box_static(
-				"House_%d_%d" % [gx, gz],
+				"H_%d_%d_%d" % [spec["village_id"], gx, gz],
 				cell_c + Vector3(0.0, hh * 0.5 + 0.12, 0.0),
 				Vector3(hw, hh, hd),
-				_house_mat()
+				_house_mat(rng)
 			)
 			var rh := 0.32
 			_add_box_static(
-				"Roof_%d_%d" % [gx, gz],
+				"R_%d_%d_%d" % [spec["village_id"], gx, gz],
 				cell_c + Vector3(0.0, hh + rh * 0.5 + 0.18, 0.0),
 				Vector3(hw * 1.06, rh, hd * 1.06),
 				_roof_mat()
 			)
-			_add_house_loot_door(cell_c, hw, hd, gx, gz)
+			_add_house_loot_door(cell_c, hw, hd, gx, gz, spec["village_id"])
+
+	var plaza := _plaza_center(spec)
+	_map_label_3d(spec["label"], plaza + Vector3(0.0, 16.5, 0.0))
+	_map_label_3d("ВНЕШН. ВОРОТА", Vector3(gap_cx, 11.0, z1 + t * 0.5))
+	_map_label_3d("ПЛИТА", Vector3(gap_cx, 9.5, z1 + t + 2.75))
+	_map_label_3d("РЫЧАГ\nвход", Vector3(gap_cx + 5.5, 9.5, z1 + t + 1.15))
+	_map_label_3d("ВНУТР. ВОРОТА", Vector3(gap_cx, 10.5, z_inner))
+	_map_label_3d("РЫЧАГ\nвнутри", Vector3(gap_cx + 3.2, 9.5, z_inner - 1.1))
+
+	if bool(spec.get("has_shop", false)):
+		var shop := WORLD_SHOP_SCENE.instantiate() as Node3D
+		if shop:
+			add_child(shop)
+			shop.global_position = plaza
+			shop.rotation_degrees = Vector3(0.0, 20.0, 0.0)
+
+	var vid: int = spec["village_id"]
+	var mains: Array = spec["npc_mains"]
+	var main_idx: Array = spec["npc_main_idx"]
+	for i in range(mains.size()):
+		var npc := QUEST_NPC_SCENE.instantiate() as CharacterBody3D
+		if npc == null:
+			continue
+		npc.npc_index = int(main_idx[i])
+		npc.village_id = vid
+		add_child(npc)
+		npc.global_position = plaza + mains[i]
+
+	var s0: int = int(spec["npc_side0"])
+	var offs: Array = spec["side_off"]
+	for j in range(offs.size()):
+		var sn := QUEST_NPC_SCENE.instantiate() as CharacterBody3D
+		if sn == null:
+			continue
+		sn.npc_index = s0 + j
+		sn.village_id = vid
+		add_child(sn)
+		sn.global_position = plaza + offs[j]
 
 
-func _add_house_loot_door(cell_c: Vector3, hw: float, hd: float, gx: int, gz: int) -> void:
+func _add_house_loot_door(cell_c: Vector3, hw: float, hd: float, gx: int, gz: int, village_id: int) -> void:
 	var door := StaticBody3D.new()
-	door.name = "HouseLoot_%d_%d" % [gx, gz]
+	door.name = "HouseLoot_%d_%d_%d" % [village_id, gx, gz]
 	door.set_script(VILLAGE_HOUSE_DOOR_SCRIPT)
 	door.collision_layer = 1
 	door.collision_mask = 1
+	door.village_id = village_id
 	var sh := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(1.35, 1.3, 0.4)
@@ -280,7 +455,7 @@ func _add_house_loot_door(cell_c: Vector3, hw: float, hd: float, gx: int, gz: in
 	door.add_child(sh)
 	add_child(door)
 	door.global_position = cell_c + Vector3(0.0, 0.04, hd * 0.5 + 0.42)
-	door.house_id = "%d_%d" % [gx, gz]
+	door.house_id = "%d_%d_%d" % [village_id, gx, gz]
 	var tag := Label3D.new()
 	tag.text = "Дом — E ограбить"
 	tag.font_size = 16
@@ -288,56 +463,3 @@ func _add_house_loot_door(cell_c: Vector3, hw: float, hd: float, gx: int, gz: in
 	tag.position = Vector3(0.0, 1.35, 0.0)
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	door.add_child(tag)
-
-
-func _plaza_cell_center() -> Vector3:
-	var gx := 2
-	var gz := 2
-	return grid_origin + Vector3((float(gx) + 0.5) * cell_size, 0.12, (float(gz) + 0.5) * cell_size)
-
-
-func _spawn_village_shop() -> void:
-	var shop := WORLD_SHOP_SCENE.instantiate() as Node3D
-	if shop == null:
-		return
-	add_child(shop)
-	shop.global_position = _plaza_cell_center()
-	# Лицом к югу (к выходу из деревни).
-	shop.rotation_degrees = Vector3(0.0, 20.0, 0.0)
-
-
-func _spawn_side_quest_npcs() -> void:
-	var base := _plaza_cell_center()
-	var spots: Array[Vector3] = [
-		Vector3(-4.2, 0.05, 3.1),
-		Vector3(4.5, 0.05, 2.6),
-		Vector3(-3.8, 0.05, -2.9),
-		Vector3(3.9, 0.05, -3.4),
-		Vector3(0.2, 0.05, 5.5),
-		Vector3(-6.0, 0.05, 0.4),
-		Vector3(6.1, 0.05, -0.8),
-		Vector3(1.2, 0.05, -5.2),
-	]
-	for i in range(spots.size()):
-		var npc := QUEST_NPC_SCENE.instantiate() as CharacterBody3D
-		if npc == null:
-			continue
-		npc.npc_index = 3 + i
-		add_child(npc)
-		npc.global_position = base + spots[i]
-
-
-func _spawn_quest_npcs() -> void:
-	var mid := _plaza_cell_center()
-	var offsets: Array[Vector3] = [
-		Vector3(-6.2, 0.05, -5.0),
-		Vector3(6.0, 0.05, -4.5),
-		Vector3(-0.5, 0.05, 6.2),
-	]
-	for i in range(mini(3, offsets.size())):
-		var npc := QUEST_NPC_SCENE.instantiate() as CharacterBody3D
-		if npc == null:
-			continue
-		npc.npc_index = i
-		add_child(npc)
-		npc.global_position = mid + offsets[i]

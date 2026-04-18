@@ -10,8 +10,8 @@ extends Node3D
 ## Проём во внешней южной стене особняка и ширина «калитки» для дверного блока.
 @export var entrance_gap: float = 7.0
 ## Размер огороженного двора (полуразмеры от центра особняка).
-@export var arena_half_x: float = 96.0
-@export var arena_half_z: float = 88.0
+@export var arena_half_x: float = 132.0
+@export var arena_half_z: float = 118.0
 @export var arena_wall_height: float = 8.0
 
 

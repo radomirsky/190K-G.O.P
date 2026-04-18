@@ -1,7 +1,7 @@
 extends StaticBody3D
-## Внутренняя дверь прохода в деревню: закрыта, пока выставлен флаг village_inner_gate_closed.
+## Внутренняя дверь прохода в деревню: закрыта, пока выставлен флаг (рычаг переключает).
 
-const FLAG_KEY := "village_inner_gate_closed"
+@export var flag_key: String = "village_inner_gate_closed"
 
 
 func _ready() -> void:
@@ -11,7 +11,7 @@ func _ready() -> void:
 
 
 func _sync_from_progress() -> void:
-	var closed := GameProgress.has_puzzle_flag(FLAG_KEY)
+	var closed := GameProgress.has_puzzle_flag(flag_key)
 	collision_layer = 1 if closed else 0
 	collision_mask = 1 if closed else 0
 	for c in get_children():

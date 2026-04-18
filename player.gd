@@ -1224,7 +1224,7 @@ func _on_player_died() -> void:
 	# Пауза/Esc на экране смерти обрабатываются здесь, не в _process.
 	set_process_unhandled_input(true)
 	GameProgress.world_time_frozen = true
-	for grp in ["enemy", "village_katana_mob"]:
+	for grp in ["enemy", "village_katana_mob", "castle_guard"]:
 		for node in get_tree().get_nodes_in_group(grp):
 			if node is CharacterBody3D:
 				(node as CharacterBody3D).set_physics_process(false)
@@ -2693,6 +2693,14 @@ func _katana_ray_damage(from: Vector3, direction: Vector3, reach: float) -> void
 			if n.has_method("take_katana_hit"):
 				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
 			return
+		if n.is_in_group("castle_guard"):
+			if n.has_method("take_katana_hit"):
+				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
+			return
+		if n.is_in_group("king_npc"):
+			if n.has_method("take_katana_hit"):
+				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
+			return
 		if n.is_in_group("village_damageable_npc"):
 			if n.has_method("take_katana_hit"):
 				n.call("take_katana_hit", katana_damage + GameProgress.up_katana_dmg)
@@ -3520,7 +3528,7 @@ func _freeze_world_time() -> void:
 		return
 	GameProgress.world_time_frozen = true
 	_world_time_snap.clear()
-	for grp in ["enemy", "village_katana_mob"]:
+	for grp in ["enemy", "village_katana_mob", "castle_guard"]:
 		for node in get_tree().get_nodes_in_group(grp):
 			if not node is CharacterBody3D:
 				continue
@@ -3557,7 +3565,11 @@ func _resume_world_time() -> void:
 		if node is CharacterBody3D:
 			var e := node as CharacterBody3D
 			var en := e as Node
-			if en.is_in_group("enemy") or en.is_in_group("village_katana_mob"):
+			if (
+				en.is_in_group("enemy")
+				or en.is_in_group("village_katana_mob")
+				or en.is_in_group("castle_guard")
+			):
 				e.set_physics_process(true)
 				var st_e: Dictionary = _world_time_snap[node]
 				e.velocity = st_e.get("vel", Vector3.ZERO) as Vector3

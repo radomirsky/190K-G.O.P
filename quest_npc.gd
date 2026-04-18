@@ -2,6 +2,7 @@ extends CharacterBody3D
 ## Житель: E — квест, пока деревня не в ярости. Убийство жителя или ограбление на глазах у других — все живые жители преследуют игрока с катаной.
 
 @export var npc_index: int = 0
+@export var village_id: int = 0
 @export var max_hp: int = 14
 @export var mob_move_speed: float = 5.1
 @export var mob_touch_damage: int = 6
@@ -122,7 +123,7 @@ func _try_mob_hit_player(pl: Node3D) -> void:
 func interact(player: Node) -> void:
 	if _dead or _angry:
 		return
-	if npc_index >= 3 and npc_index <= 10:
+	if npc_index >= 3:
 		CityQuests.on_side_npc_interact(npc_index, player)
 	else:
 		CityQuests.on_npc_interact(npc_index, player)
@@ -158,4 +159,4 @@ func _die() -> void:
 	var kat := get_node_or_null("MobKatana") as Node3D
 	if kat:
 		kat.visible = false
-	CityQuests.on_village_npc_killed(npc_index)
+	CityQuests.on_village_npc_killed(npc_index, village_id)

@@ -8,11 +8,15 @@ extends StaticBody3D
 ## Субтитры внизу экрана (тот же Label, что у жителей — notify_quest_banner), после переключения.
 @export var banner_text_when_flag_on: String = ""
 @export var banner_text_when_flag_off: String = ""
+## Если > 0 — один раз при первом срабатывании (one_shot) выдать МАМА.
+@export var mama_reward_on_first_pull: int = 0
 
 var _pulled: bool = false
+var _mama_left: int = 0
 
 
 func _ready() -> void:
+	_mama_left = mama_reward_on_first_pull
 	add_to_group("puzzle_lever")
 	call_deferred("_apply_handle_from_flag")
 
@@ -23,6 +27,9 @@ func interact(_player: Node) -> void:
 	if one_shot:
 		_pulled = true
 		GameProgress.set_puzzle_flag(flag_key, true)
+		if _mama_left > 0:
+			GameProgress.add_mama(_mama_left)
+			_mama_left = 0
 		_emit_subtitle_banner(_player, banner_text_when_flag_on)
 	elif toggle_flag_on_interact:
 		var on := not GameProgress.has_puzzle_flag(flag_key)

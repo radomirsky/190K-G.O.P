@@ -86,7 +86,7 @@ func on_side_npc_interact(idx: int, player: Node) -> void:
 	if final_boss_spawned:
 		_player_banner(player, "Главная угроза уже отбита. Отдыхай.")
 		return
-	if idx < 3 or idx > 10:
+	if idx < 3:
 		return
 	if bool(_side_done.get(idx, false)):
 		_player_banner(player, "Спасибо, ты нас выручил!")
@@ -132,7 +132,7 @@ func on_side_npc_interact(idx: int, player: Node) -> void:
 const ROBBERY_WITNESS_RADIUS_FOR_MOB: float = 20.0
 
 
-func robbery_triggers_villager_mob(door_node: Node3D, player: Node) -> bool:
+func robbery_triggers_villager_mob(door_node: Node3D, player: Node, door_village_id: int = 0) -> bool:
 	var tree := door_node.get_tree()
 	if tree == null:
 		return false
@@ -143,6 +143,8 @@ func robbery_triggers_villager_mob(door_node: Node3D, player: Node) -> bool:
 	for n in tree.get_nodes_in_group("talkable_npc"):
 		if not n is Node3D:
 			continue
+		if int(n.get("village_id")) != door_village_id:
+			continue
 		var pg: Vector3 = (n as Node3D).global_position
 		for pt in pts:
 			if pg.distance_squared_to(pt) <= lim2:
@@ -150,19 +152,22 @@ func robbery_triggers_villager_mob(door_node: Node3D, player: Node) -> bool:
 	return false
 
 
-func alert_all_villagers_katana_mob() -> void:
+func alert_all_villagers_katana_mob(only_village_id: int = -1) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
 	for n in tree.get_nodes_in_group("quest_npc"):
+		if only_village_id >= 0 and int(n.get("village_id")) != only_village_id:
+			continue
 		if n.has_method("activate_katana_mob"):
 			n.call("activate_katana_mob")
 
 
-func on_village_npc_killed(idx: int) -> void:
+func on_village_npc_killed(idx: int, village_id: int = 0) -> void:
 	GameProgress.register_village_murder()
-	alert_all_villagers_katana_mob()
-	if idx >= 3 and idx <= 10:
+	GameProgress.register_villager_kill_by_player()
+	alert_all_villagers_katana_mob(village_id)
+	if idx >= 3:
 		_side_accepted.erase(idx)
 		_side_kills0.erase(idx)
 		_side_mama0.erase(idx)
@@ -239,17 +244,20 @@ func get_world_map_bbcode() -> String:
 	t += "• [color=#5a8fe8]Житель 0[/color] — северо-западнее лавки — [b]главный[/b] квест: враги (нужна плита у ворот).\n"
 	t += "• [color=#5a8fe8]Житель 1[/color] — восток — главный: внешние ворота.\n"
 	t += "• [color=#5a8fe8]Житель 2[/color] — север площади — главный: МАМА.\n"
-	t += "• [color=#8fbc8f]Жители 3–10[/color] — по площади — [b]побочные[/b] поручения (2 убийства или 2 МАМА с момента согласия).\n"
-	t += "• [color=#ff8888]Катана[/color] режет жителей; [b]убийство жителя[/b] — все остальные с катанами. [b]Ограбление на глазах[/b] (житель рядом) — то же. Плюс враги [b]чаще[/b] и могут [b]заходить в деревню[/b].\n"
-	t += "• [color=#daa520]Дома[/color] — жёлтая «дверь» у фасада — E [b]ограбить[/b] (один раз на дом; тихое ограбление без свидетелей — без толпы с катанами).\n"
+	t += "• [color=#8fbc8f]Жители 3+[/color] — побочные поручения в каждой деревне (2 убийства или 2 МАМА с момента согласия).\n"
+	t += "• [color=#ffd700]Король[/color] у [b]замка[/b] на востоке — поручения: враги, жители, головоломки у стен.\n"
+	t += "• [color=#ff8888]Катана[/color] по королю — [b]стража[/b] нападает. Страж и король режутся катаной.\n"
+	t += "• [color=#ff8888]Катана[/color] режет жителей; [b]убийство жителя[/b] — моб только в [b]его[/b] деревне. [b]Ограбление на глазах[/b] — то же.\n"
+	t += "• [color=#daa520]Дома[/color] — E [b]ограбить[/b]; у каждой деревни свои [b]внешние[/b] и [b]внутренние[/b] рычаги ворот.\n"
 	if GameProgress.village_outlaw_strikes > 0:
 		t += "  [color=#ff6666]Розыск в деревне: %d (чем выше — тем злее спавн).[/color]\n" % GameProgress.village_outlaw_strikes
 	t += "• Ты — игрок; фургон у [b]юга[/b] особняка.\n\n"
 	t += "[b]Что за места[/b]\n"
 	t += "• [color=#deb887]Особняк[/color] — деревянный пол у центра арены, въезд с юга; стены двора — тёмная трава вокруг.\n"
-	t += "• [color=#8fbc8f]Деревня[/color] — севернее двора, [b]каменный периметр[/b]; [b]внешние[/b] ворота открываются только [b]снаружи[/b] (плита + рычаг у дороги); [b]внутренний[/b] рычаг — только вторые ворота в коридоре.\n"
-	t += "• [color=#dda0dd]Лавка[/color] — киоск «МАГАЗИН» в [b]центре[/b] площади деревни (подойди — откроется тот же магазин, что Tab).\n"
-	t += "• [color=#aaa]Дорога к деревне[/color] — серая полоса от двора к воротам; у ворот зелёная [b]ПЛИТА[/b] и подписи на 3D-карте.\n\n"
+	t += "• [color=#8fbc8f]Три деревни[/color] — у каждой своя плита и рычаг у внешних ворот; второй рычаг [b]закрывает/открывает наружу[/b] после головоломки; третий — [b]внутренний[/b] проход.\n"
+	t += "• [color=#dda0dd]Лавка[/color] — только у [b]деревни I[/b] (центр площади); Tab — везде.\n"
+	t += "• [color=#e6c35c]Замок[/color] — восточнее арены; три рычага загадок для короля + бонусные рычаги у дозора, руин и капища.\n"
+	t += "• [color=#aaa]Дороги[/color] — серые плиты на карте ведут к деревням и к замку.\n\n"
 	t += "[b]Плита для первого жителя[/b]\n"
 	if GameProgress.has_puzzle_flag("village_entry_unlocked"):
 		t += "  [color=#90ee90]✓ Готово — можно говорить с жителем №1 (синий, задание «враги»).[/color]\n\n"
@@ -268,7 +276,7 @@ func get_world_map_bbcode() -> String:
 		t += "     [color=#90ee90]✓ Рычаг[/color]\n"
 	else:
 		t += "     Рычаг ещё не переключён.\n"
-	t += "  Когда оба пункта готовы — [b]блок у ворот[/b] уберётся.\n\n"
+	t += "  Когда оба пункта готовы — [b]внешние ворота[/b] можно открыть; рычаг у проёма снова их [b]закрывает[/b].\n\n"
 	t += "[b]Главные жители (E)[/b]\n"
 	var qn := ["Житель 0 — враги", "Житель 1 — ворота", "Житель 2 — МАМА"]
 	for i in range(3):
@@ -278,8 +286,8 @@ func get_world_map_bbcode() -> String:
 			t += "  [color=#ffcc66]%s — в процессе[/color]\n" % qn[i]
 		else:
 			t += "  %s\n" % qn[i]
-	t += "[b]Побочные (жители 3–10)[/b]\n"
-	for j in range(3, 11):
+	t += "[b]Побочные жители (деревни I–III)[/b]\n"
+	for j in range(3, 27):
 		if bool(_side_done.get(j, false)):
 			t += "  [color=#888]Житель %d — сделано[/color]\n" % j
 		elif bool(_side_accepted.get(j, false)):
