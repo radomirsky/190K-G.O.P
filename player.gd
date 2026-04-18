@@ -220,6 +220,7 @@ var _shop_from_world_zone: bool = false
 var _shop_layer: CanvasLayer = null
 var _world_map_layer: CanvasLayer = null
 var _world_map_rt: RichTextLabel = null
+var _world_map_subviewport: SubViewport = null
 var _world_map_visible: bool = false
 var _grapple_state: GrappleState = GrappleState.INACTIVE
 var _grapple_target: Node3D = null
@@ -1008,6 +1009,8 @@ func _toggle_shop() -> void:
 		_world_map_visible = false
 		if _world_map_layer != null:
 			_world_map_layer.visible = false
+		_world_map_stop_3d_preview()
+		_update_game_pause_from_ui()
 	_shop_open = not _shop_open
 	if _shop_layer:
 		_shop_layer.visible = _shop_open
@@ -1029,7 +1032,8 @@ func _setup_world_map_ui() -> void:
 	_world_map_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	_world_map_layer.visible = false
 	add_child(_world_map_layer)
-	var root := ColorRect.new()
+	var root := WorldMapOverlayRoot.new()
+	root.player_node = self
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.color = Color(0.06, 0.07, 0.09, 0.94)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1041,10 +1045,41 @@ func _setup_world_map_ui() -> void:
 	margin.add_theme_constant_override("margin_top", 24)
 	margin.add_theme_constant_override("margin_bottom", 24)
 	root.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 10)
+	margin.add_child(vbox)
+	var map_hint := Label.new()
+	map_hint.text = "Вид сверху (игра на паузе, урон отключён)"
+	map_hint.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0, 0.95))
+	vbox.add_child(map_hint)
+	var vpc := SubViewportContainer.new()
+	vpc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vpc.stretch = true
+	vpc.custom_minimum_size = Vector2(400, 220)
+	vbox.add_child(vpc)
+	var sv := SubViewport.new()
+	sv.size = Vector2i(880, 380)
+	sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	sv.handle_input_locally = false
+	sv.transparent_bg = false
+	vpc.add_child(sv)
+	_world_map_subviewport = sv
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = 64.0
+	cam.near = 0.5
+	cam.far = 420.0
+	cam.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	cam.position = Vector3(38.0, 118.0, -26.0)
+	cam.current = true
+	sv.add_child(cam)
 	var sc := ScrollContainer.new()
-	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.custom_minimum_size = Vector2(100, 140)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(sc)
+	vbox.add_child(sc)
 	var rt := RichTextLabel.new()
 	rt.bbcode_enabled = true
 	rt.fit_content = true
@@ -1061,6 +1096,26 @@ func _refresh_world_map_content() -> void:
 	_world_map_rt.text = CityQuests.get_world_map_bbcode()
 
 
+func _world_map_start_3d_preview() -> void:
+	if _world_map_subviewport == null or not is_inside_tree():
+		return
+	_world_map_subviewport.world_3d = get_world_3d()
+	_world_map_subviewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+
+
+func _world_map_stop_3d_preview() -> void:
+	if _world_map_subviewport == null:
+		return
+	_world_map_subviewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
+func _update_game_pause_from_ui() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	tree.paused = _pause_visible or _world_map_visible
+
+
 func _toggle_world_map() -> void:
 	if _shop_open:
 		_toggle_shop()
@@ -1071,17 +1126,22 @@ func _toggle_world_map() -> void:
 		_world_map_layer.visible = _world_map_visible
 	if _world_map_visible:
 		_refresh_world_map_content()
+		_world_map_start_3d_preview()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_want_mouse_captured = false
 	else:
+		_world_map_stop_3d_preview()
 		if not _shop_open and not _pause_visible and not _death_visible:
 			_want_mouse_captured = true
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			_center_mouse_in_viewport()
+	_update_game_pause_from_ui()
 
 
 func take_damage(amount: int, source: String = "") -> void:
 	if amount <= 0:
+		return
+	if _world_map_visible:
 		return
 	if _hp_cd > 0.0:
 		return
@@ -1214,6 +1274,8 @@ func _show_death_screen() -> void:
 		_world_map_visible = false
 		if _world_map_layer != null:
 			_world_map_layer.visible = false
+		_world_map_stop_3d_preview()
+		_update_game_pause_from_ui()
 	_ensure_death_ui()
 	_death_visible = true
 	_death_ui_input_locked = true
@@ -1377,10 +1439,8 @@ func _open_pause_menu_internal() -> void:
 	if _pause_layer:
 		# Экран смерти (слой 200) — поднимаем паузу, иначе синий экран не виден.
 		_pause_layer.layer = 220 if _death_visible else 150
-	var tree := get_tree()
-	if tree:
-		tree.paused = true
 	_pause_visible = true
+	_update_game_pause_from_ui()
 	if _pause_layer:
 		_pause_layer.visible = true
 	if _pause_overlay:
@@ -1397,9 +1457,7 @@ func _hide_pause_menu() -> void:
 	if _pause_layer:
 		_pause_layer.visible = false
 		_pause_layer.layer = 150
-	var tree := get_tree()
-	if tree:
-		tree.paused = false
+	_update_game_pause_from_ui()
 	if not _shop_open and not _death_visible:
 		_want_mouse_captured = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -3946,3 +4004,27 @@ func _throw_held_charged() -> void:
 	else:
 		e2.velocity = dir2 * speed2
 	_held_enemy = null
+
+
+## Корень оверлея карты: при паузе сцены ввод к игроку не доходит — ловим M/Esc здесь (PROCESS_MODE_ALWAYS).
+class WorldMapOverlayRoot extends ColorRect:
+	var player_node: Node = null
+
+	func _ready() -> void:
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		set_process_unhandled_input(true)
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if not visible:
+			return
+		if event is InputEventKey and event.pressed and not event.echo:
+			var k := event as InputEventKey
+			if (
+				k.keycode == KEY_M
+				or k.physical_keycode == KEY_M
+				or k.keycode == KEY_ESCAPE
+				or k.physical_keycode == KEY_ESCAPE
+			):
+				if player_node != null and is_instance_valid(player_node) and player_node.has_method("_toggle_world_map"):
+					player_node.call("_toggle_world_map")
+					get_viewport().set_input_as_handled()
