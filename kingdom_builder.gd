@@ -93,7 +93,7 @@ func _build_keep() -> void:
 	var d := 13.0
 	_add_box(self, kc + Vector3(0.0, 0.12, 0.0), Vector3(w, 0.24, d), m2)
 	_add_box(self, kc + Vector3(0.0, y, -d * 0.5 - t * 0.5), Vector3(w + t, h, t), m)
-	var gap := 4.2
+	var gap := 5.5
 	var side_w := (w - gap) * 0.5
 	_add_box(
 		self,
@@ -110,7 +110,25 @@ func _build_keep() -> void:
 	_add_box(self, kc + Vector3(w * 0.5 + t * 0.5, y, 0.0), Vector3(t, h, d + 2.0 * t), m)
 	_add_box(self, kc + Vector3(-w * 0.5 - t * 0.5, y, 0.0), Vector3(t, h, d + 2.0 * t), m)
 	var th := 10.8
-	_add_box(self, kc + Vector3(0.0, th * 0.5 + 0.26, -1.4), Vector3(8.8, th, 7.8), m)
+	var ty := th * 0.5 + 0.26
+	var tz := -5.28
+	var tw := 7.4
+	var tdepth := 4.4
+	var aisle := 4.0
+	var pillar_w := (tw - aisle) * 0.5
+	_add_box(
+		self,
+		kc + Vector3(-aisle * 0.25 - pillar_w * 0.5, ty, tz),
+		Vector3(pillar_w, th, tdepth),
+		m
+	)
+	_add_box(
+		self,
+		kc + Vector3(aisle * 0.25 + pillar_w * 0.5, ty, tz),
+		Vector3(pillar_w, th, tdepth),
+		m
+	)
+	_add_box(self, kc + Vector3(0.0, ty, tz - tdepth * 0.5 - 0.55), Vector3(tw, th, 1.15), m)
 
 
 func _build_throne() -> void:
@@ -120,13 +138,13 @@ func _build_throne() -> void:
 	gold.metallic = 0.55
 	gold.roughness = 0.42
 	var base := kc + Vector3(0.0, 0.0, -4.35)
-	_add_box(self, base + Vector3(0.0, 0.38, 0.0), Vector3(1.85, 0.45, 1.45), gold)
-	_add_box(self, base + Vector3(0.0, 1.12, -0.68), Vector3(1.95, 1.5, 0.42), gold)
+	_add_box(self, base + Vector3(0.0, 0.38, 0.0), Vector3(1.85, 0.45, 1.45), gold, false)
+	_add_box(self, base + Vector3(0.0, 1.12, -0.68), Vector3(1.95, 1.5, 0.42), gold, false)
 	var arm := StandardMaterial3D.new()
 	arm.albedo_color = Color(0.55, 0.42, 0.18, 1)
 	arm.metallic = 0.5
-	_add_box(self, base + Vector3(-0.95, 0.62, 0.05), Vector3(0.35, 0.35, 1.15), arm)
-	_add_box(self, base + Vector3(0.95, 0.62, 0.05), Vector3(0.35, 0.35, 1.15), arm)
+	_add_box(self, base + Vector3(-0.95, 0.62, 0.05), Vector3(0.35, 0.35, 1.15), arm, false)
+	_add_box(self, base + Vector3(0.95, 0.62, 0.05), Vector3(0.35, 0.35, 1.15), arm, false)
 
 
 func _spawn_king() -> void:
@@ -168,7 +186,7 @@ func _spawn_king() -> void:
 	crown.rotation_degrees = Vector3(90.0, 0.0, 0.0)
 	k.add_child(crown)
 	var lbl := Label3D.new()
-	lbl.text = "Король — E"
+	lbl.text = "Король — E\n(задания)"
 	lbl.font_size = 22
 	lbl.outline_size = 7
 	lbl.position = Vector3(0.0, 1.65, 0.0)

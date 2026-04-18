@@ -70,6 +70,33 @@ func on_king_interact(player: Node) -> void:
 			_player_banner(player, "Свободен. Продолжение следует…")
 
 
+func get_map_bbcode() -> String:
+	var t := ""
+	t += "  [b]Путь:[/b] [i]западный проход[/i] в стене двора → [i]донжон[/i] с юга зала → проход между башнями → [i]трон[/i] (E — задания).\n"
+	match _stage:
+		0:
+			t += "  [color=#ffcc66]Король:[/color] поговори на троне (E), чтобы начать цепочку поручений.\n"
+		1:
+			var le := KILL_ENEMIES_NEED - (GameProgress.regular_kills - _k0)
+			t += "  [color=#ffcc66]Король:[/color] убей врагов с момента принятия, осталось: %d\n" % maxi(0, le)
+		2:
+			var lv := KILL_VILLAGERS_NEED - (GameProgress.villager_kills - _v0)
+			t += "  [color=#ffcc66]Король:[/color] убей жителей деревень, осталось: %d\n" % maxi(0, lv)
+		3:
+			var ok := (
+				GameProgress.has_puzzle_flag("king_puzzle_altar")
+				and GameProgress.has_puzzle_flag("king_puzzle_bastion")
+				and GameProgress.has_puzzle_flag("king_puzzle_garden")
+			)
+			if ok:
+				t += "  [color=#90ee90]Король:[/color] все рычаги нажаты — снова E у короля за наградой.\n"
+			else:
+				t += "  [color=#ffcc66]Король:[/color] три рычага во дворе: алтарь, бастион, сад.\n"
+		_:
+			t += "  [color=#888]Король:[/color] поручения выполнены.\n"
+	return t
+
+
 func on_king_attacked() -> void:
 	var tree := get_tree()
 	if tree == null:
