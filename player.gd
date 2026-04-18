@@ -212,6 +212,8 @@ var _hp_label: Label = null
 var _gun_label: Label = null
 var _mama_hud: Label = null
 var _van_fuel_label: Label = null
+var _quest_banner: Label = null
+var _quest_banner_timer: Timer = null
 var _shop_open: bool = false
 ## Магазин открыт из зоны киоска на карте (при выходе из зоны закроется).
 var _shop_from_world_zone: bool = false
@@ -579,7 +581,38 @@ func _setup_hp_ui() -> void:
 	_van_fuel_label.visible = false
 	_van_fuel_label.position = Vector2(16, 84)
 	_hp_layer.add_child(_van_fuel_label)
+	_quest_banner = Label.new()
+	_quest_banner.visible = false
+	_quest_banner.position = Vector2(16, 420)
+	_quest_banner.size = Vector2(1180, 140)
+	_quest_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_quest_banner.add_theme_color_override("font_color", Color(0.96, 0.94, 1.0, 1.0))
+	_hp_layer.add_child(_quest_banner)
+	_quest_banner_timer = Timer.new()
+	_quest_banner_timer.process_mode = Node.PROCESS_MODE_ALWAYS
+	_quest_banner_timer.one_shot = true
+	_quest_banner_timer.timeout.connect(_on_quest_banner_timer)
+	add_child(_quest_banner_timer)
 	_update_hp_ui()
+
+
+func _on_quest_banner_timer() -> void:
+	if _quest_banner != null:
+		_quest_banner.visible = false
+
+
+func notify_quest_banner(text: String) -> void:
+	if not is_inside_tree():
+		return
+	if _hp_layer == null:
+		_setup_hp_ui()
+	if _quest_banner == null:
+		return
+	_quest_banner.text = text
+	_quest_banner.visible = true
+	if _quest_banner_timer != null:
+		_quest_banner_timer.stop()
+		_quest_banner_timer.start(5.5)
 
 
 func _update_hp_ui() -> void:
@@ -2003,6 +2036,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _is_use_key(event):
 			if _driving_van != null and is_instance_valid(_driving_van):
 				exit_van()
+			elif _try_interact_quest_npc():
+				pass
 			elif _held:
 				_throw_held_tap()
 			elif _held_enemy != null and is_instance_valid(_held_enemy):
@@ -3390,9 +3425,56 @@ func _raycast_aimed_enemy(max_dist: float) -> CharacterBody3D:
 	var n := col as Node
 	while n != null:
 		if n.is_in_group("enemy") and n is CharacterBody3D:
-			return n as CharacterBody3D
+			var cb := n as CharacterBody3D
+			if bool(cb.get("is_boss")):
+				return null
+			return cb
 		n = n.get_parent()
 	return null
+
+
+func _raycast_aimed_quest_npc(max_dist: float) -> Node:
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var space := get_world_3d().direct_space_state
+	var to := from + dir * max_dist
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.hit_from_inside = true
+	var excl: Array[RID] = [get_rid()]
+	if _held != null and is_instance_valid(_held):
+		excl.append(_held.get_rid())
+	query.exclude = excl
+	var hit: Dictionary = space.intersect_ray(query)
+	if hit.is_empty() or not hit.has("collider"):
+		return null
+	var col: Object = hit["collider"]
+	if not col is Node:
+		return null
+	var n := col as Node
+	while n != null:
+		if n.is_in_group("quest_npc"):
+			return n
+		n = n.get_parent()
+	return null
+
+
+func _try_interact_quest_npc() -> bool:
+	if not _world_actions_input_ok():
+		return false
+	if _shop_open or _pause_visible:
+		return false
+	if _is_driving_van():
+		return false
+	var npc := _raycast_aimed_quest_npc(4.2)
+	if npc == null:
+		return false
+	if npc.has_method("interact"):
+		npc.call("interact", self)
+		return true
+	return false
 
 
 func _find_nearest_throwable(from_rb: RigidBody3D, max_dist: float) -> RigidBody3D:

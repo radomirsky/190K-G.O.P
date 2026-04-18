@@ -24,6 +24,7 @@ run/pause_on_focus_loss=false
 
 ThrowablesBudget="*res://throwable_budget.gd"
 GameProgress="*res://game_progress.gd"
+CityQuests="*res://city_quests.gd"
 
 [display]
 

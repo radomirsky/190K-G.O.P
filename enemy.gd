@@ -1,4 +1,5 @@
 extends CharacterBody3D
+class_name GameEnemy
 
 @export var move_speed: float = 4.2
 @export var accel: float = 18.0

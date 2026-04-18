@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://cfmf2gvwovbox"]
+[gd_scene load_steps=13 format=3 uid="uid://cfmf2gvwovbox"]
 
 [ext_resource type="Script" uid="uid://ccxh1c7bxjs0h" path="res://player.gd" id="1_player"]
 [ext_resource type="Script" path="res://throwable_break.gd" id="3_throw_break"]
@@ -6,7 +6,8 @@
 [ext_resource type="Script" path="res://enemy_spawner.gd" id="5_enemy_spawner"]
 [ext_resource type="PackedScene" uid="uid://c8worldshop01" path="res://world_shop.tscn" id="6_world_shop"]
 [ext_resource type="Script" path="res://mansion_builder.gd" id="7_mansion"]
-[ext_resource type="PackedScene" uid="uid://dq8mansiontruck01" path="res://truck.tscn" id="8_truck"]
+[ext_resource type="PackedScene" uid="uid://drivablevan01" path="res://drivable_van.tscn" id="8_van"]
+[ext_resource type="Script" path="res://city_builder.gd" id="9_city"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -36,6 +37,9 @@ shadow_enabled = true
 [node name="Mansion" type="Node3D" parent="."]
 script = ExtResource("7_mansion")
 
+[node name="City" type="Node3D" parent="."]
+script = ExtResource("9_city")
+
 [node name="Cube" type="RigidBody3D" parent="." groups=["throwable"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.55, -7)
 mass = 0.85
@@ -58,8 +62,8 @@ outline_size = 12
 outline_modulate = Color(0.04, 0.05, 0.1, 0.92)
 modulate = Color(1, 0.93, 0.76, 1)
 
-[node name="Truck" parent="." instance=ExtResource("8_truck")]
-transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0.85, 11)
+[node name="DrivableVan" parent="." instance=ExtResource("8_van")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 32)
 
 [node name="Player" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, -2)
