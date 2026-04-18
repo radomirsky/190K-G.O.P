@@ -149,7 +149,7 @@ func _build_north_passage_and_puzzle() -> void:
 	var plate := PLATE_SCENE.instantiate() as Area3D
 	if plate:
 		plate.flag_key = "suburbs_plate"
-		plate.extra_flag_keys = ["village_entry_unlocked"]
+		plate.extra_flag_keys = PackedStringArray(["village_entry_unlocked"])
 		add_child(plate)
 		# Южнее проёма в стене — на подходе к деревне.
 		plate.global_position = Vector3(gap_cx, 0.12, z1 + t + 2.75)

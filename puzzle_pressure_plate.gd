@@ -2,6 +2,8 @@ extends Area3D
 ## Нажимная плита: при входе игрока выставляет флаг в GameProgress.
 
 @export var flag_key: String = "suburbs_plate"
+## Дополнительные флаги (например village_entry_unlocked для доступа к жителю 1).
+@export var extra_flag_keys: PackedStringArray = PackedStringArray()
 @export var one_shot: bool = true
 
 var _done: bool = false
@@ -21,6 +23,9 @@ func _on_body_entered(body: Node) -> void:
 	if body is CharacterBody3D and body.is_in_group("player"):
 		_done = true
 		GameProgress.set_puzzle_flag(flag_key, true)
+		for fk in extra_flag_keys:
+			if fk != "":
+				GameProgress.set_puzzle_flag(fk, true)
 		_flash_ok()
 
 
