@@ -8,8 +8,6 @@ extends StaticBody3D
 ## Субтитры внизу экрана (тот же Label, что у жителей — notify_quest_banner), после переключения.
 @export var banner_text_when_flag_on: String = ""
 @export var banner_text_when_flag_off: String = ""
-## Для рычага внутри деревни: когда внутренние ворота открываются (флаг снят), открыть и внешние ворота (плита+рычаг снаружи).
-@export var sync_outer_puzzle_when_inner_gate_opens: bool = false
 
 var _pulled: bool = false
 
@@ -29,9 +27,6 @@ func interact(_player: Node) -> void:
 	elif toggle_flag_on_interact:
 		var on := not GameProgress.has_puzzle_flag(flag_key)
 		GameProgress.set_puzzle_flag(flag_key, on)
-		if sync_outer_puzzle_when_inner_gate_opens and not GameProgress.has_puzzle_flag(flag_key):
-			GameProgress.set_puzzle_flag("suburbs_plate", true)
-			GameProgress.set_puzzle_flag("suburbs_lever", true)
 		_emit_subtitle_banner(_player, banner_text_when_flag_on if on else banner_text_when_flag_off)
 	else:
 		GameProgress.set_puzzle_flag(flag_key, true)
