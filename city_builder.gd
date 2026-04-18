@@ -5,6 +5,7 @@ const QUEST_NPC_SCENE := preload("res://quest_npc.tscn")
 const PLATE_SCENE := preload("res://puzzle_pressure_plate.tscn")
 const LEVER_SCENE := preload("res://puzzle_lever.tscn")
 const GATE_SCENE := preload("res://puzzle_gate_door.tscn")
+const INNER_GATE_SCENE := preload("res://village_inner_gate.tscn")
 
 ## Левый нижний угол сетки домов (мир): вся сетка севернее особняка (z < ~-22).
 @export var grid_origin: Vector3 = Vector3(44.0, 0.0, -80.0)
@@ -17,6 +18,7 @@ func _ready() -> void:
 	_build_north_passage_and_puzzle()
 	_build_plaza_and_houses()
 	_build_village_walls_and_gateway()
+	_build_village_inner_gate_and_lever()
 	_spawn_quest_npcs()
 	_register_npc_village_exclusion_zone()
 
@@ -116,6 +118,30 @@ func _build_village_walls_and_gateway() -> void:
 	_add_box_static("VillageGatePostR", Vector3(xmax + 0.48, h * 0.55, z1 + t * 0.5), Vector3(0.82, h * 1.12, 0.82), wm)
 	var beam_w := xmax - xmin + 1.2
 	_add_box_static("VillageGateLintel", Vector3((xmin + xmax) * 0.5, h * 1.12 + 0.35, z1 + t * 0.5), Vector3(beam_w, 0.55, 0.75), wm)
+
+
+## Внутри деревни: рычаг переключает вторую дверь в проходе (можно жать E сколько угодно).
+func _build_village_inner_gate_and_lever() -> void:
+	var lay := _village_wall_layout()
+	var gap_cx: float = lay["gap_cx"]
+	var z1: float = lay["z1"]
+	var t: float = lay["t"]
+	# Чуть севернее внешних ворот — в коридоре между стеной и площадью.
+	var z_inner := z1 - 4.2
+	var inner := INNER_GATE_SCENE.instantiate() as StaticBody3D
+	if inner:
+		add_child(inner)
+		inner.global_position = Vector3(gap_cx, 0.0, z_inner)
+	var lever_in := LEVER_SCENE.instantiate() as StaticBody3D
+	if lever_in:
+		lever_in.flag_key = "village_inner_gate_closed"
+		lever_in.one_shot = false
+		lever_in.toggle_flag_on_interact = true
+		add_child(lever_in)
+		lever_in.global_position = Vector3(gap_cx + 3.2, 0.05, z_inner - 1.1)
+		var lbl := lever_in.get_node_or_null("Label3D") as Label3D
+		if lbl:
+			lbl.text = "Рычаг ворот — E\n(снова E — открыть)"
 
 
 func _add_box_static(name: String, pos: Vector3, size: Vector3, mat: Material) -> void:
