@@ -10,6 +10,8 @@ signal village_outlaw_changed(strikes: int)
 
 const KILLS_FOR_BOSS := 10
 const BOSS_MAMA_PICKUP_COUNT := 5
+## Выдача за удар «креативной палочкой» (режим креатива).
+const CREATIVE_WAND_MAMA_GRANT := 9999
 const COST_PYRAMID_MAG := 4
 const COST_PYRAMID_RELOAD := 5
 const COST_STASIS_DMG := 6
@@ -150,6 +152,16 @@ func on_regular_enemy_died(world_pos: Vector3) -> void:
 	regular_kills += 1
 	kills_changed.emit(regular_kills)
 	_spawn_mama_pickup(world_pos)
+	if regular_kills > 0 and regular_kills % KILLS_FOR_BOSS == 0:
+		if regular_kills > last_boss_kills_milestone:
+			last_boss_kills_milestone = regular_kills
+			boss_spawn_requested.emit()
+
+
+## Убийство креативной палочкой: счётчик и волны босса, без жетона на земле (МАМА выдаётся отдельно).
+func register_enemy_kill_no_mama_pickup() -> void:
+	regular_kills += 1
+	kills_changed.emit(regular_kills)
 	if regular_kills > 0 and regular_kills % KILLS_FOR_BOSS == 0:
 		if regular_kills > last_boss_kills_milestone:
 			last_boss_kills_milestone = regular_kills

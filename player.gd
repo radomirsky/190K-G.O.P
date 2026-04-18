@@ -1,6 +1,6 @@
 extends CharacterBody3D
 
-enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF, ANIMATRON, KATANA }
+enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF, ANIMATRON, KATANA, CREATIVE_WAND }
 enum GrappleState { INACTIVE, ROPE_READY, PULLING }
 enum ViewMode { FIRST, SECOND, THIRD }
 
@@ -17,6 +17,8 @@ const _GUN_MODEL_LOCAL_POS := Vector3(0.25, -0.22, -0.55)
 const _STASIS_GUN_LOCAL_POS := Vector3(-0.28, -0.2, -0.52)
 const _SAWED_GUN_LOCAL_POS := Vector3(0.22, -0.21, -0.48)
 const _ANIMATRON_MODEL_LOCAL_POS := Vector3(-0.02, -0.23, -0.62)
+const _CREATIVE_WAND_LOCAL_POS := Vector3(0.34, -0.19, -0.58)
+const CREATIVE_WAND_FIRE_COOLDOWN_SEC := 1.15
 const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 	Vector3(-0.35, 0.5, 0),
 	Vector3(0.35, 0.5, 0),
@@ -174,6 +176,8 @@ var _katana_parry_cd: float = 0.0
 var _katana_parry_flash_t: float = 0.0
 var _katana_blade_mat: StandardMaterial3D = null
 var _katana_lunge_cd: float = 0.0
+var _creative_wand_node: Node3D = null
+var _creative_wand_cd: float = 0.0
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -437,6 +441,7 @@ func _process(_delta: float) -> void:
 	_katana_parry_cd = maxf(_katana_parry_cd - _delta, 0.0)
 	_katana_parry_flash_t = maxf(_katana_parry_flash_t - _delta, 0.0)
 	_katana_lunge_cd = maxf(_katana_lunge_cd - _delta, 0.0)
+	_creative_wand_cd = maxf(_creative_wand_cd - _delta, 0.0)
 	_dash_cd = maxf(_dash_cd - _delta, 0.0)
 	_hp_cd = maxf(_hp_cd - _delta, 0.0)
 
@@ -580,11 +585,29 @@ func _process(_delta: float) -> void:
 				if _katana_parry_flash_t > 0.0:
 					fk = clampf(_katana_parry_flash_t / 0.14, 0.0, 1.0)
 				_katana_blade_mat.emission_energy_multiplier = 0.35 + 0.9 * fk
+	elif _equipped == EquippedGun.CREATIVE_WAND:
+		_ensure_creative_wand_nodes()
+		if _creative_wand_node:
+			var tw := float(Time.get_ticks_msec()) / 1000.0
+			var wk := 0.0
+			if _creative_wand_cd > 0.0:
+				wk = clampf(_creative_wand_cd / maxf(CREATIVE_WAND_FIRE_COOLDOWN_SEC, 0.01), 0.0, 1.0)
+			_creative_wand_node.rotation = Vector3(
+				sin(tw * 7.0) * 0.07,
+				sin(tw * 5.0) * 0.1,
+				sin(tw * 9.0) * 0.05 * wk
+			)
+			_creative_wand_node.position = (
+				_CREATIVE_WAND_LOCAL_POS + Vector3(0.0, sin(tw * 11.0) * 0.018, 0.0)
+			)
 	else:
-		# Если катана была активна и режим сменился — возвращаем в idle.
+		# Если катана или палочка были активны и режим сменился — возвращаем в idle.
 		if _katana_node and is_instance_valid(_katana_node):
 			_katana_node.position = _katana_idle_pos
 			_katana_node.rotation = _katana_idle_rot
+		if _creative_wand_node and is_instance_valid(_creative_wand_node):
+			_creative_wand_node.position = _CREATIVE_WAND_LOCAL_POS
+			_creative_wand_node.rotation = Vector3.ZERO
 
 
 func _setup_hp_ui() -> void:
@@ -706,6 +729,11 @@ func _update_hp_ui() -> void:
 				_gun_label.text = "АНИМАТРОН: перезарядка %.1fs" % [_animatron_cd]
 			else:
 				_gun_label.text = "АНИМАТРОН: готов (ЛКМ — чёрная воронка)"
+		elif _equipped == EquippedGun.CREATIVE_WAND:
+			if _creative_wand_cd > 0.0:
+				_gun_label.text = "КРЕАТИВНАЯ ПАЛОЧКА: пауза %.1fs" % _creative_wand_cd
+			else:
+				_gun_label.text = "КРЕАТИВНАЯ ПАЛОЧКА: ЛКМ — все враги + %d МАМА" % GameProgress.CREATIVE_WAND_MAMA_GRANT
 		else:
 			_gun_label.text = ""
 	if _mama_hud:
@@ -1869,7 +1897,15 @@ func _grapple_try_melee() -> void:
 
 
 func _cycle_weapon(step: int) -> void:
-	var guns := [EquippedGun.PYRAMID, EquippedGun.STASIS, EquippedGun.SAWED_OFF, EquippedGun.ANIMATRON, EquippedGun.KATANA]
+	var guns: Array[EquippedGun] = [
+		EquippedGun.PYRAMID,
+		EquippedGun.STASIS,
+		EquippedGun.SAWED_OFF,
+		EquippedGun.ANIMATRON,
+		EquippedGun.KATANA,
+	]
+	if GameSave.is_creative():
+		guns.append(EquippedGun.CREATIVE_WAND)
 	var idx := guns.find(_equipped)
 	if idx < 0:
 		idx = 0
@@ -2032,6 +2068,10 @@ func _input(event: InputEvent) -> void:
 				_katana_cd = maxf(0.08, katana_cooldown_sec * kspd)
 				get_viewport().set_input_as_handled()
 				return
+			if _equipped == EquippedGun.CREATIVE_WAND and GameSave.is_creative() and _creative_wand_cd <= 0.0:
+				_fire_creative_wand()
+				get_viewport().set_input_as_handled()
+				return
 			if _held:
 				_throw_press_usec = Time.get_ticks_usec()
 		else:
@@ -2151,6 +2191,18 @@ func _unhandled_input(event: InputEvent) -> void:
 				_equipped = EquippedGun.NONE
 			else:
 				_equipped = EquippedGun.KATANA
+			_update_weapon_visibility()
+			_update_hp_ui()
+			get_viewport().set_input_as_handled()
+		elif (
+			(event.keycode == KEY_0 or event.physical_keycode == KEY_0)
+			and _world_actions_input_ok()
+			and GameSave.is_creative()
+		):
+			if _equipped == EquippedGun.CREATIVE_WAND:
+				_equipped = EquippedGun.NONE
+			else:
+				_equipped = EquippedGun.CREATIVE_WAND
 			_update_weapon_visibility()
 			_update_hp_ui()
 			get_viewport().set_input_as_handled()
@@ -2378,11 +2430,14 @@ func _cancel_stasis_reload_anim() -> void:
 
 
 func _update_weapon_visibility() -> void:
+	if not GameSave.is_creative() and _equipped == EquippedGun.CREATIVE_WAND:
+		_equipped = EquippedGun.NONE
 	_ensure_gun_nodes()
 	_ensure_stasis_nodes()
 	_ensure_sawed_nodes()
 	_ensure_animatron_nodes()
 	_ensure_katana_nodes()
+	_ensure_creative_wand_nodes()
 	if _is_driving_van():
 		if _gun_node:
 			_gun_node.visible = false
@@ -2394,6 +2449,8 @@ func _update_weapon_visibility() -> void:
 			_animatron_node.visible = false
 		if _katana_node:
 			_katana_node.visible = false
+		if _creative_wand_node:
+			_creative_wand_node.visible = false
 		return
 	if _gun_node:
 		_gun_node.visible = (_equipped == EquippedGun.PYRAMID)
@@ -2405,6 +2462,81 @@ func _update_weapon_visibility() -> void:
 		_animatron_node.visible = (_equipped == EquippedGun.ANIMATRON)
 	if _katana_node:
 		_katana_node.visible = (_equipped == EquippedGun.KATANA)
+	if _creative_wand_node:
+		_creative_wand_node.visible = (
+			GameSave.is_creative() and _equipped == EquippedGun.CREATIVE_WAND
+		)
+
+
+func _fire_creative_wand() -> void:
+	if not GameSave.is_creative():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var list: Array[Node] = []
+	for n in tree.get_nodes_in_group("enemy"):
+		if n is Node:
+			list.append(n as Node)
+	for n in list:
+		if not is_instance_valid(n):
+			continue
+		if n is GameEnemy:
+			(n as GameEnemy).creative_wand_kill()
+		elif n.has_method("creative_wand_kill"):
+			n.call("creative_wand_kill")
+	GameProgress.add_mama(GameProgress.CREATIVE_WAND_MAMA_GRANT)
+	_creative_wand_cd = CREATIVE_WAND_FIRE_COOLDOWN_SEC
+	notify_quest_banner(
+		"Креативная палочка: враги сняты. +%d МАМА." % GameProgress.CREATIVE_WAND_MAMA_GRANT
+	)
+	_update_hp_ui()
+
+
+func _ensure_creative_wand_nodes() -> void:
+	if _creative_wand_node != null and is_instance_valid(_creative_wand_node):
+		return
+	if _camera == null:
+		return
+	_creative_wand_node = Node3D.new()
+	_creative_wand_node.name = "CreativeWand"
+	_camera.add_child(_creative_wand_node)
+	_creative_wand_node.position = _CREATIVE_WAND_LOCAL_POS
+	var rod := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.028
+	cyl.bottom_radius = 0.04
+	cyl.height = 0.52
+	cyl.radial_segments = 10
+	rod.mesh = cyl
+	var mrod := StandardMaterial3D.new()
+	mrod.albedo_color = Color(0.55, 0.22, 0.92, 1.0)
+	mrod.emission_enabled = true
+	mrod.emission = Color(0.72, 0.35, 1.0, 1.0)
+	mrod.emission_energy_multiplier = 0.85
+	mrod.metallic = 0.35
+	mrod.roughness = 0.4
+	rod.set_surface_override_material(0, mrod)
+	rod.rotation_degrees = Vector3(90, 0, 0)
+	rod.position = Vector3(0, 0, -0.18)
+	_creative_wand_node.add_child(rod)
+	var star := MeshInstance3D.new()
+	var sph := SphereMesh.new()
+	sph.radius = 0.07
+	sph.height = 0.14
+	sph.radial_segments = 12
+	star.mesh = sph
+	var ms := StandardMaterial3D.new()
+	ms.albedo_color = Color(1.0, 0.85, 0.35, 1.0)
+	ms.emission_enabled = true
+	ms.emission = Color(1.0, 0.92, 0.5, 1.0)
+	ms.emission_energy_multiplier = 1.1
+	ms.metallic = 0.5
+	ms.roughness = 0.25
+	star.set_surface_override_material(0, ms)
+	star.position = Vector3(0, 0, -0.52)
+	_creative_wand_node.add_child(star)
+	_creative_wand_node.visible = false
 
 
 func _toggle_gun() -> void:

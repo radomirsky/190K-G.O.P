@@ -624,6 +624,18 @@ func _die_scatter() -> void:
 	queue_free()
 
 
+## Режим креатива: мгновенная гибель; обычный босс-дроп, для рядовых — только учёт убийства (МАМА с палочки отдельно).
+func creative_wand_kill() -> void:
+	if _dead:
+		return
+	_dead = true
+	if is_boss:
+		GameProgress.spawn_boss_mama_drops(global_position)
+	else:
+		GameProgress.register_enemy_kill_no_mama_pickup()
+	queue_free()
+
+
 func _is_stasis_projectile(rb: RigidBody3D) -> bool:
 	return rb.is_in_group("stasis_projectile") or rb.name == "StasisRing"
 
