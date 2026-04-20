@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://king_corpse.gd" id="1_corpse"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.55, 0.35, 0.9)
+
+[sub_resource type="StandardMaterial3D" id="Mat_robe"]
+albedo_color = Color(0.62, 0.18, 0.22, 1)
+roughness = 0.72
+
+[sub_resource type="BoxShape3D" id="BoxShape_body"]
+size = Vector3(0.55, 0.35, 0.9)
+
+[node name="KingCorpse" type="RigidBody3D" groups=["throwable"]]
+mass = 14.0
+continuous_cd = true
+script = ExtResource("1_corpse")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("Mat_robe")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape_body")
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42, 0)
+billboard = 1
+text = "Король"
+font_size = 18
+outline_size = 6

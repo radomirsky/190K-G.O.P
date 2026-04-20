@@ -1,14 +1,17 @@
 extends CharacterBody3D
 
-enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF, ANIMATRON, KATANA, CREATIVE_WAND }
+enum EquippedGun { NONE, PYRAMID, STASIS, SAWED_OFF, ANIMATRON, KATANA, CREATIVE_WAND, CYBER_CANNON }
 enum GrappleState { INACTIVE, ROPE_READY, PULLING }
 enum ViewMode { FIRST, SECOND, THIRD }
+enum CharacterKind { HERO, COWBOY, CYBER }
 
 const THROWABLE_CUBE_SCENE := preload("res://throwable_cube.tscn")
 const THROWABLE_PYRAMID_SCENE := preload("res://throwable_pyramid.tscn")
 const THROWABLE_STASIS_RING_SCENE := preload("res://throwable_stasis_ring.tscn")
 const DYNAMITE_SCENE := preload("res://dynamite.tscn")
 const ANIMATRON_BLACKHOLE_SCENE := preload("res://animatron_blackhole.tscn")
+const DRIVABLE_HORSE_SCENE := preload("res://drivable_horse.tscn")
+const DRIVABLE_FLYCAR_SCENE := preload("res://drivable_flycar.tscn")
 const PAUSE_MENU_OVERLAY := preload("res://pause_menu_overlay.gd")
 const THROWABLE_COLOR_FREE := Color(0.45, 0.65, 0.95, 1.0)
 const THROWABLE_COLOR_FIXED := Color(0.28, 0.72, 0.38, 1.0)
@@ -126,6 +129,11 @@ const _HUMANOID_CUBE_LOCAL: Array[Vector3] = [
 @export_range(0.06, 0.35, 0.01) var katana_lunge_duration_sec: float = 0.13
 @export_range(0.0, 60.0, 0.1) var katana_lunge_cooldown_sec: float = 10.0
 
+## Киберпушка: удерживай ЛКМ, чтобы зарядить; отпусти — супер-взрыв.
+@export_range(1.0, 120.0, 1.0) var cyber_charge_sec: float = 60.0
+@export_range(2.0, 80.0, 0.5) var cyber_explosion_radius: float = 22.0
+@export_range(1, 9999, 1) var cyber_explosion_damage: int = 999
+
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 @onready var _camera_pivot: Node3D = $CameraPivot
@@ -176,6 +184,8 @@ var _katana_parry_flash_t: float = 0.0
 var _katana_blade_mat: StandardMaterial3D = null
 var _katana_lunge_cd: float = 0.0
 var _creative_wand_node: Node3D = null
+var _cyber_charge_t: float = 0.0
+var _cyber_charging: bool = false
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 var _dash_dir: Vector3 = Vector3.ZERO
@@ -202,6 +212,8 @@ var _death_hint_label: Label = null
 var _death_visible: bool = false
 ## Первые секунды на экране смерти: нельзя нажимать кнопки и Esc (рестарт).
 var _death_ui_input_locked: bool = false
+var _secret_credits_layer: CanvasLayer = null
+var _secret_ending_active: bool = false
 const DEATH_UI_LOCK_SEC: float = 3.0
 var _autosave_acc: float = 0.0
 const AUTOSAVE_INTERVAL_SEC: float = 20.0
@@ -255,6 +267,11 @@ var _van_saved_parent: Node = null
 var _van_saved_index: int = 0
 var _van_saved_layer: int = 1
 var _van_saved_mask: int = 1
+
+var _character_kind: CharacterKind = CharacterKind.HERO
+var _character_visual_root: Node3D = null
+var _character_hat: Node3D = null
+var _personal_vehicle: Node3D = null
 
 
 func _is_driving_van() -> bool:
@@ -335,6 +352,8 @@ func _ready() -> void:
 	call_deferred("_setup_shop_ui")
 	call_deferred("_ensure_pause_ui")
 	call_deferred("_setup_world_map_ui")
+	call_deferred("_setup_character_visuals")
+	call_deferred("_apply_character_profile")
 	if not GameProgress.mama_changed.is_connected(_on_mama_or_upgrades_changed):
 		GameProgress.mama_changed.connect(_on_mama_or_upgrades_changed)
 	if not GameProgress.upgrades_changed.is_connected(_on_mama_or_upgrades_changed):
@@ -414,6 +433,18 @@ func _process(_delta: float) -> void:
 			vp_warp.warp_mouse(rw.position + rw.size * 0.5)
 	if _world_map_visible:
 		_update_world_map_player_marker()
+	if _cyber_charging:
+		if (
+			GameProgress.world_time_frozen
+			or _pause_visible
+			or _shop_open
+			or _death_visible
+			or _world_map_visible
+		):
+			_cyber_charging = false
+			_cyber_charge_t = 0.0
+		else:
+			_cyber_charge_t = clampf(_cyber_charge_t + _delta, 0.0, cyber_charge_sec)
 	_gun_cd = maxf(_gun_cd - _delta, 0.0)
 	_gun_reload = maxf(_gun_reload - _delta, 0.0)
 	if _equipped == EquippedGun.PYRAMID and _gun_refill_wait > 0.0:
@@ -731,6 +762,15 @@ func _update_hp_ui() -> void:
 				_gun_label.text = "АНИМАТРОН: перезарядка %.1fs" % [_animatron_cd]
 			else:
 				_gun_label.text = "АНИМАТРОН: готов (ЛКМ — чёрная воронка)"
+		elif _equipped == EquippedGun.CYBER_CANNON:
+			var pct := 0
+			if cyber_charge_sec > 0.01:
+				pct = int(round((_cyber_charge_t / cyber_charge_sec) * 100.0))
+			pct = clampi(pct, 0, 100)
+			if _cyber_charging:
+				_gun_label.text = "КИБЕРПУШКА: заряд %d%% (держи ЛКМ, отпусти — взрыв)" % pct
+			else:
+				_gun_label.text = "КИБЕРПУШКА: заряд %d%% (ЛКМ — заряд/взрыв)" % pct
 		elif _equipped == EquippedGun.CREATIVE_WAND:
 			_gun_label.text = (
 				"КРЕАТИВНАЯ ПАЛОЧКА: ЛКМ — все враги + %d МАМА  |  6 — убрать"
@@ -1538,6 +1578,92 @@ func _show_death_screen() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
+func start_secret_ending_credits() -> void:
+	if _secret_credits_layer != null and is_instance_valid(_secret_credits_layer):
+		return
+	exit_van()
+	_release_held()
+	if _held_enemy != null and is_instance_valid(_held_enemy):
+		_release_held_enemy()
+	_secret_ending_active = true
+	GameProgress.world_time_frozen = true
+	for node in get_tree().get_nodes_in_group("enemy"):
+		if node is CharacterBody3D:
+			(node as CharacterBody3D).set_physics_process(false)
+	for node in get_tree().get_nodes_in_group("castle_guard"):
+		if node is CharacterBody3D:
+			(node as CharacterBody3D).set_physics_process(false)
+	_want_mouse_captured = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_secret_credits_layer = CanvasLayer.new()
+	_secret_credits_layer.layer = 195
+	_secret_credits_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_secret_credits_layer)
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_secret_credits_layer.add_child(root)
+	var bg := ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0.04, 0.06, 0.12, 0.96)
+	root.add_child(bg)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_top", 36)
+	margin.add_theme_constant_override("margin_bottom", 88)
+	root.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 18)
+	margin.add_child(vbox)
+	var title := Label.new()
+	title.text = "Ты победил Большого Короля!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	vbox.add_child(title)
+	var body := Label.new()
+	body.text = (
+		"Ты обрадовался.\n\n"
+		+ "Спасибо, что прошли игру.\n"
+		+ "Надеюсь, вам понравилось.\n\n"
+		+ "Продолжение следует…"
+	)
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_font_size_override("font_size", 22)
+	vbox.add_child(body)
+	var btn := Button.new()
+	btn.text = "В главное меню"
+	btn.custom_minimum_size = Vector2(280, 42)
+	btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	btn.offset_bottom = -20.0
+	btn.pressed.connect(_finish_secret_credits_to_menu)
+	root.add_child(btn)
+	var hint := Label.new()
+	hint.text = "Esc — то же самое"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 16)
+	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	hint.offset_bottom = -68.0
+	root.add_child(hint)
+	notify_quest_banner("Титры: секретный финал пройден.")
+	GameSave.autosave_if_playing(self)
+
+
+func _finish_secret_credits_to_menu() -> void:
+	_secret_ending_active = false
+	GameProgress.world_time_frozen = false
+	if _secret_credits_layer != null and is_instance_valid(_secret_credits_layer):
+		_secret_credits_layer.queue_free()
+	_secret_credits_layer = null
+	var tree := get_tree()
+	if tree != null:
+		tree.change_scene_to_file("res://title_menu.tscn")
+
+
 func _apply_death_ui_lock_state() -> void:
 	if _death_restart_btn:
 		_death_restart_btn.disabled = _death_ui_input_locked
@@ -1846,6 +1972,8 @@ func _is_use_key(event: InputEventKey) -> bool:
 
 
 func _world_actions_input_ok() -> bool:
+	if _secret_ending_active:
+		return false
 	var m := Input.mouse_mode
 	return (
 		m == Input.MOUSE_MODE_CAPTURED
@@ -2150,6 +2278,10 @@ func _input(event: InputEvent) -> void:
 					_throw_held_charged()
 				get_viewport().set_input_as_handled()
 				return
+			if _equipped == EquippedGun.CYBER_CANNON:
+				_cyber_charging = true
+				get_viewport().set_input_as_handled()
+				return
 			if _equipped == EquippedGun.PYRAMID and _gun_cd <= 0.0 and _gun_ammo > 0:
 				_cancel_gun_finish_reload_anim()
 				_fire_gun_pyramid()
@@ -2194,6 +2326,18 @@ func _input(event: InputEvent) -> void:
 			if _held:
 				_throw_press_usec = Time.get_ticks_usec()
 		else:
+			if _equipped == EquippedGun.CYBER_CANNON and _cyber_charging:
+				_cyber_charging = false
+				if _cyber_charge_t >= maxf(0.1, cyber_charge_sec):
+					_cyber_charge_t = 0.0
+					_fire_cyber_cannon()
+				else:
+					var pct := 0
+					if cyber_charge_sec > 0.01:
+						pct = int(round((_cyber_charge_t / cyber_charge_sec) * 100.0))
+					notify_quest_banner("Киберпушка: заряд %d%% (нужно 100%%)." % clampi(pct, 0, 100))
+				get_viewport().set_input_as_handled()
+				return
 			if _held and _throw_press_usec >= 0:
 				_throw_held_charged()
 			elif (
@@ -2210,6 +2354,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k := event as InputEventKey
 		esc = k.pressed and not k.echo and (k.keycode == KEY_ESCAPE or k.physical_keycode == KEY_ESCAPE)
 	if event.is_action_pressed("ui_cancel") or esc:
+		if _secret_credits_layer != null and is_instance_valid(_secret_credits_layer) and _secret_credits_layer.visible:
+			_finish_secret_credits_to_menu()
+			get_viewport().set_input_as_handled()
+			return
 		if _world_map_visible:
 			_toggle_world_map()
 			get_viewport().set_input_as_handled()
@@ -2236,6 +2384,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:
+		# Переключение персонажа: стрелки влево/вправо.
+		if (
+			(event.keycode == KEY_LEFT or event.physical_keycode == KEY_LEFT)
+			and _world_actions_input_ok()
+			and not _shop_open
+			and not _pause_visible
+			and not _world_map_visible
+			and not _death_visible
+		):
+			_switch_character(-1)
+			get_viewport().set_input_as_handled()
+			return
+		if (
+			(event.keycode == KEY_RIGHT or event.physical_keycode == KEY_RIGHT)
+			and _world_actions_input_ok()
+			and not _shop_open
+			and not _pause_visible
+			and not _world_map_visible
+			and not _death_visible
+		):
+			_switch_character(1)
+			get_viewport().set_input_as_handled()
+			return
 		if _is_driving_van():
 			if event.keycode == KEY_M and _world_actions_input_ok():
 				_toggle_world_map()
@@ -2600,6 +2771,11 @@ func _fire_creative_wand() -> void:
 			(n as GameEnemy).creative_wand_kill()
 		elif n.has_method("creative_wand_kill"):
 			n.call("creative_wand_kill")
+	for kn in tree.get_nodes_in_group("king_npc"):
+		if not is_instance_valid(kn):
+			continue
+		if kn.has_method("creative_wand_kill"):
+			kn.call("creative_wand_kill")
 	var mobs: Array[Node] = []
 	for n2 in tree.get_nodes_in_group("village_katana_mob"):
 		if n2 is Node:
@@ -3169,6 +3345,74 @@ func _fire_animatron_blackhole() -> void:
 		bh.call("set_initial_velocity", dir * animatron_blackhole_fly_speed)
 
 
+func _fire_cyber_cannon() -> void:
+	if _camera == null:
+		return
+	var tree := get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	var scene := tree.current_scene
+	var ad := _aim_ray_from_dir()
+	var from: Vector3 = ad[0]
+	var dir: Vector3 = (ad[1] as Vector3).normalized()
+	var to := from + dir * 160.0
+	var space := scene.get_world_3d().direct_space_state
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.collide_with_areas = true
+	q.collide_with_bodies = true
+	q.hit_from_inside = true
+	q.exclude = [self]
+	var hit := space.intersect_ray(q)
+	var p := to
+	if not hit.is_empty() and hit.has("position"):
+		p = hit["position"] as Vector3
+
+	_spawn_cyber_explosion(p)
+
+
+func _spawn_cyber_explosion(p: Vector3) -> void:
+	notify_quest_banner("Кибер-взрыв!")
+	var tree := get_tree()
+	if tree == null:
+		return
+	var r := cyber_explosion_radius
+	var r2 := r * r
+
+	for n in tree.get_nodes_in_group("enemy"):
+		if not n is Node3D:
+			continue
+		var e := n as Node3D
+		if e.global_position.distance_squared_to(p) > r2:
+			continue
+		if e.has_method("take_dynamite_explosion"):
+			e.call("take_dynamite_explosion", cyber_explosion_damage)
+		elif e.has_method("take_damage"):
+			e.call("take_damage", cyber_explosion_damage)
+
+	# Разнести то, что игрок может таскать/бросать.
+	for n in tree.get_nodes_in_group("throwable"):
+		if not n is RigidBody3D:
+			continue
+		var rb := n as RigidBody3D
+		var d2 := rb.global_position.distance_squared_to(p)
+		if d2 > r2 or d2 < 0.0001:
+			continue
+		var k := 1.0 - clampf(sqrt(d2) / maxf(r, 0.01), 0.0, 1.0)
+		var dir := (rb.global_position - p).normalized()
+		rb.freeze = false
+		rb.apply_central_impulse(dir * (65.0 * k) * rb.mass)
+
+	# «Дома и что захочешь»: ломаем маркеры/двери/триггеры лута домов.
+	for n in tree.get_nodes_in_group("village_house_loot"):
+		if not n is Node:
+			continue
+		var nd := n as Node
+		if nd is Node3D:
+			if (nd as Node3D).global_position.distance_squared_to(p) > r2:
+				continue
+		nd.queue_free()
+
+
 func _animatron_aim_dir() -> Vector3:
 	# Автонаведение: если враг близко к прицелу, летим в него; иначе — по прямому лучу.
 	var ad := _aim_ray_from_dir()
@@ -3197,12 +3441,128 @@ func _animatron_aim_dir() -> Vector3:
 	return fwd
 
 
+func _setup_character_visuals() -> void:
+	if _character_visual_root != null and is_instance_valid(_character_visual_root):
+		return
+	_character_visual_root = get_node_or_null("Humanoid") as Node3D
+	if _character_visual_root == null:
+		_character_visual_root = self
+
+
+func _switch_character(dir: int) -> void:
+	if dir == 0:
+		return
+	if _is_driving_van():
+		exit_van()
+	var idx := int(_character_kind) + (1 if dir > 0 else -1)
+	if idx < 0:
+		idx = int(CharacterKind.CYBER)
+	if idx > int(CharacterKind.CYBER):
+		idx = 0
+	_character_kind = idx as CharacterKind
+	_apply_character_profile()
+
+
+func _apply_character_profile() -> void:
+	_setup_character_visuals()
+	# Сбрасываем кибер-заряд, чтобы не переносился между персонажами.
+	_cyber_charging = false
+	_cyber_charge_t = 0.0
+
+	match _character_kind:
+		CharacterKind.HERO:
+			max_hp = 100
+			_equipped = EquippedGun.NONE
+			_apply_hat(false, Color.WHITE)
+			_ensure_personal_vehicle(null)
+			notify_quest_banner("Персонаж: Герой")
+		CharacterKind.COWBOY:
+			# Шляпа даёт больше HP.
+			max_hp = 120
+			_apply_hat(true, Color(0.45, 0.28, 0.12, 1.0))
+			# Ковбой дружит с катаной/верёвкой как «лассо».
+			if _equipped == EquippedGun.CYBER_CANNON:
+				_equipped = EquippedGun.KATANA
+			_ensure_personal_vehicle(DRIVABLE_HORSE_SCENE)
+			notify_quest_banner("Персонаж: Ковбой (HP 120, лассо = верёвка ПКМ/ЛКМ)")
+		CharacterKind.CYBER:
+			max_hp = 100
+			_apply_hat(false, Color.WHITE)
+			_equipped = EquippedGun.CYBER_CANNON
+			_ensure_personal_vehicle(DRIVABLE_FLYCAR_SCENE)
+			notify_quest_banner("Персонаж: Киберчеловек (ЛКМ — заряд киберпушки ~1 мин)")
+
+	_hp = clampi(_hp, 0, max_hp)
+	_update_weapon_visibility()
+	_update_hp_ui()
+
+
+func _apply_hat(enabled: bool, color: Color) -> void:
+	if not enabled:
+		if _character_hat != null and is_instance_valid(_character_hat):
+			_character_hat.queue_free()
+		_character_hat = null
+		return
+	if _character_visual_root == null:
+		return
+	if _character_hat != null and is_instance_valid(_character_hat):
+		return
+	var hat := Node3D.new()
+	hat.name = "CowboyHat"
+	_character_visual_root.add_child(hat)
+	hat.position = Vector3(0.0, 5.95, 0.0)
+	var brim := MeshInstance3D.new()
+	var brim_mesh := CylinderMesh.new()
+	brim_mesh.top_radius = 1.0
+	brim_mesh.bottom_radius = 1.0
+	brim_mesh.height = 0.1
+	brim_mesh.radial_segments = 18
+	brim.mesh = brim_mesh
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.roughness = 0.9
+	brim.set_surface_override_material(0, m)
+	hat.add_child(brim)
+	var top := MeshInstance3D.new()
+	var top_mesh := CylinderMesh.new()
+	top_mesh.top_radius = 0.45
+	top_mesh.bottom_radius = 0.55
+	top_mesh.height = 0.55
+	top_mesh.radial_segments = 18
+	top.mesh = top_mesh
+	top.position = Vector3(0.0, 0.32, 0.0)
+	top.set_surface_override_material(0, m)
+	hat.add_child(top)
+	_character_hat = hat
+
+
+func _ensure_personal_vehicle(scene: PackedScene) -> void:
+	var tree := get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	var world := tree.current_scene
+	if scene == null:
+		if _personal_vehicle != null and is_instance_valid(_personal_vehicle):
+			_personal_vehicle.queue_free()
+		_personal_vehicle = null
+		return
+	if _personal_vehicle == null or not is_instance_valid(_personal_vehicle):
+		var v := scene.instantiate() as Node3D
+		if v == null:
+			return
+		world.add_child(v)
+		v.add_to_group("drivable_van")
+		v.add_to_group("personal_vehicle")
+		_personal_vehicle = v
+	# Подгоняем транспорт рядом с игроком, если он далеко.
+	if _personal_vehicle != null and is_instance_valid(_personal_vehicle):
+		var want := global_position + Vector3(4.0, 0.0, 3.0)
+		if _personal_vehicle.global_position.distance_squared_to(want) > 16.0 * 16.0:
+			_personal_vehicle.global_position = want
+
+
 func _apply_camera_look_smoothing(delta: float) -> void:
 	var lk := look_key_speed * delta
-	if Input.is_key_pressed(KEY_LEFT):
-		_look_yaw_target += lk
-	if Input.is_key_pressed(KEY_RIGHT):
-		_look_yaw_target -= lk
 	if Input.is_key_pressed(KEY_UP):
 		_look_pitch_target = _clamp_pitch_target(_look_pitch_target + lk)
 	if Input.is_key_pressed(KEY_DOWN):
@@ -3222,6 +3582,17 @@ func _apply_camera_look_smoothing(delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if _driving_van != null and is_instance_valid(_driving_van):
+		_apply_camera_look_smoothing(delta)
+		return
+	if _secret_ending_active:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		else:
+			if velocity.y < 0.0:
+				velocity.y = 0.0
+		move_and_slide()
 		_apply_camera_look_smoothing(delta)
 		return
 	_autosave_acc += delta

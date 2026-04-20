@@ -1,0 +1,30 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://drivable_flycar.gd" id="1_flycar"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(2.15, 0.75, 3.1)
+
+[sub_resource type="StandardMaterial3D" id="MatFly"]
+albedo_color = Color(0.12, 0.75, 0.92, 1)
+metallic = 0.35
+roughness = 0.35
+
+[sub_resource type="BoxShape3D" id="BoxShape_fly"]
+size = Vector3(2.2, 0.8, 3.2)
+
+[node name="DrivableFlyCar" type="CharacterBody3D" groups=["drivable_van"]]
+collision_layer = 1
+collision_mask = 1
+floor_snap_length = 0.0
+script = ExtResource("1_flycar")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("MatFly")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+shape = SubResource("BoxShape_fly")
+

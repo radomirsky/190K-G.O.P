@@ -5,6 +5,11 @@ extends Node3D
 func _ready() -> void:
 	if GameSave.is_peaceful():
 		call_deferred("_apply_peaceful_clear_enemies")
+	call_deferred("_restore_secret_big_king_if_needed")
+
+
+func _restore_secret_big_king_if_needed() -> void:
+	KingQuests.restore_secret_big_king_if_save_pending()
 
 
 func _apply_peaceful_clear_enemies() -> void:

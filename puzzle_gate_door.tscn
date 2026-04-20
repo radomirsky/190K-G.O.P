@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://puzzlegate01"]
+[gd_scene format=3 uid="uid://pu00legate01"]
 
 [ext_resource type="Script" path="res://puzzle_gate_door.gd" id="1_script"]
 

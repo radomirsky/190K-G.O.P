@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://bossairbomb01"]
+[gd_scene format=3 uid="uid://bossairbomb01"]
 
 [ext_resource type="Script" path="res://boss_air_bomb.gd" id="1_script"]
 

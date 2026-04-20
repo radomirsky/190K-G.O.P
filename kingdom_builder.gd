@@ -14,7 +14,8 @@ func _ready() -> void:
 	_build_perimeter()
 	_build_keep()
 	_build_throne()
-	_spawn_king()
+	if not KingQuests.king_slain:
+		_spawn_king()
 	_spawn_guards()
 	_spawn_king_puzzles()
 	_spawn_world_bonus_puzzles()

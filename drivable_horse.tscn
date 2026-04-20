@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://drivable_horse.gd" id="1_horse"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(1.25, 1.55, 2.25)
+
+[sub_resource type="StandardMaterial3D" id="MatHorse"]
+albedo_color = Color(0.25, 0.16, 0.08, 1)
+roughness = 0.92
+
+[sub_resource type="BoxShape3D" id="BoxShape_horse"]
+size = Vector3(1.3, 1.6, 2.3)
+
+[node name="DrivableHorse" type="CharacterBody3D" groups=["drivable_van"]]
+collision_layer = 1
+collision_mask = 1
+floor_snap_length = 0.15
+script = ExtResource("1_horse")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("MatHorse")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+shape = SubResource("BoxShape_horse")
+

@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://dynamite01"]
+
+[ext_resource type="Script" path="res://dynamite.gd" id="1_dyn"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_stick"]
+top_radius = 0.11
+bottom_radius = 0.11
+height = 0.42
+
+[sub_resource type="StandardMaterial3D" id="MatBody"]
+albedo_color = Color(0.75, 0.18, 0.12, 1)
+roughness = 0.65
+
+[sub_resource type="CylinderShape3D" id="CylinderShape_stick"]
+height = 0.42
+radius = 0.12
+
+[node name="Dynamite" type="RigidBody3D"]
+mass = 0.55
+continuous_cd = true
+linear_damp = 0.35
+angular_damp = 0.6
+script = ExtResource("1_dyn")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.21, 0)
+mesh = SubResource("CylinderMesh_stick")
+surface_material_override/0 = SubResource("MatBody")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.21, 0)
+shape = SubResource("CylinderShape_stick")
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.52, 0)
+billboard = 1
+text = "ДИНАМИТ"
+font_size = 28
+outline_size = 8
+outline_modulate = Color(0.05, 0.05, 0.08, 0.9)

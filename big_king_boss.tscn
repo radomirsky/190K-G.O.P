@@ -1,6 +1,6 @@
-[gd_scene format=3 uid="uid://cuktn5eql83m7"]
+[gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://god_screwdriver_boss.gd" id="1_script"]
+[ext_resource type="Script" path="res://big_king_boss.gd" id="1_script"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_enemy_cube"]
 size = Vector3(0.85, 0.85, 0.85)
@@ -15,7 +15,7 @@ height = 1.05
 [sub_resource type="SphereShape3D" id="SphereShape3D_break"]
 radius = 2.8
 
-[node name="GodScrewdriver" type="CharacterBody3D" groups=["enemy"]]
+[node name="BigKing" type="CharacterBody3D" groups=["enemy"]]
 script = ExtResource("1_script")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

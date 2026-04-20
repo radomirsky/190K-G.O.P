@@ -1,0 +1,58 @@
+[gd_scene load_steps=7 format=3 uid="uid://drivablevan01"]
+
+[ext_resource type="Script" path="res://drivable_van.gd" id="1_van"]
+[ext_resource type="Script" path="res://van_turret.gd" id="2_turret"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(2.05, 1.65, 4.6)
+
+[sub_resource type="StandardMaterial3D" id="MatVan"]
+albedo_color = Color(0.82, 0.8, 0.78, 1)
+metallic = 0.12
+roughness = 0.55
+
+[sub_resource type="BoxShape3D" id="BoxShape_van"]
+size = Vector3(2.08, 1.68, 4.65)
+
+[sub_resource type="BoxMesh" id="BoxMesh_barrel"]
+size = Vector3(0.2, 0.16, 0.48)
+
+[sub_resource type="StandardMaterial3D" id="MatTurret"]
+albedo_color = Color(0.32, 0.34, 0.38, 1)
+metallic = 0.35
+roughness = 0.55
+
+[node name="DrivableVan" type="CharacterBody3D" groups=["drivable_van"]]
+collision_layer = 1
+collision_mask = 1
+floor_snap_length = 0.15
+script = ExtResource("1_van")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("MatVan")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.34, 0)
+shape = SubResource("BoxShape_van")
+
+[node name="VanTurretBomb" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.58, 1.14, 0.1)
+script = ExtResource("2_turret")
+bomb_turret = true
+
+[node name="Barrel" type="MeshInstance3D" parent="VanTurretBomb"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, -0.22)
+mesh = SubResource("BoxMesh_barrel")
+surface_material_override/0 = SubResource("MatTurret")
+
+[node name="VanTurretGatling" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.58, 1.14, 0.1)
+script = ExtResource("2_turret")
+bomb_turret = false
+
+[node name="Barrel" type="MeshInstance3D" parent="VanTurretGatling"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, -0.22)
+mesh = SubResource("BoxMesh_barrel")
+surface_material_override/0 = SubResource("MatTurret")
