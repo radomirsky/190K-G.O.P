@@ -9,7 +9,7 @@ extends CharacterBody3D
 @export var fuel_max: float = 100.0
 @export var fuel_drain_idle: float = 0.65
 @export var fuel_drain_moving: float = 2.2
-@export var hull_max_hp: int = 100
+@export var hull_max_hp: int = 70
 
 var _fuel: float = 100.0
 var _hull_hp: int = 100

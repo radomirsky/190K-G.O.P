@@ -28,6 +28,8 @@ const COST_VAN_TURRETS := 10
 const COST_VAN_REFUEL := 5
 const COST_VAN_RESTORE := 20
 const COST_DYNAMITE := 5
+const COST_HORSE_BUY := 8
+const COST_HORSE_RESTORE := 6
 const MAX_UPGRADE_TIER := 4
 
 var mama_tokens: int = 0
@@ -56,6 +58,49 @@ var van_turrets_installed: bool = false
 var van_destroyed: bool = false
 ## Купленный в лавке динамит (бросок клав. 6).
 var dynamite_stock: int = 0
+## Лошадь ковбоя покупается на рынке.
+var horse_owned: bool = false
+var horse_destroyed: bool = false
+
+## Координата рынка (площадь деревни с лавкой) для телепорта по карте.
+var market_pos_valid: bool = false
+var market_pos_x: float = 0.0
+var market_pos_y: float = 0.0
+var market_pos_z: float = 0.0
+
+
+func register_market_pos(pos: Vector3) -> void:
+	if market_pos_valid:
+		return
+	market_pos_valid = true
+	market_pos_x = pos.x
+	market_pos_y = pos.y
+	market_pos_z = pos.z
+
+
+func get_market_pos() -> Vector3:
+	return Vector3(market_pos_x, market_pos_y, market_pos_z)
+
+
+func try_buy_horse() -> bool:
+	if horse_owned:
+		return false
+	if not spend_mama(COST_HORSE_BUY):
+		return false
+	horse_owned = true
+	horse_destroyed = false
+	upgrades_changed.emit()
+	return true
+
+
+func try_buy_horse_restore() -> bool:
+	if not horse_owned or not horse_destroyed:
+		return false
+	if not spend_mama(COST_HORSE_RESTORE):
+		return false
+	horse_destroyed = false
+	upgrades_changed.emit()
+	return true
 ## Флаги головоломок (плиты, рычаги, ворота) — ключ → true.
 var puzzle_flags: Dictionary = {}
 ## Накопленные проступки в деревне: убийство жителя +2, ограбление дома +1. Враги чаще и могут зайти в деревню.
@@ -417,6 +462,12 @@ func reset_for_new_game() -> void:
 	van_turrets_installed = false
 	van_destroyed = false
 	dynamite_stock = 0
+	horse_owned = false
+	horse_destroyed = false
+	market_pos_valid = false
+	market_pos_x = 0.0
+	market_pos_y = 0.0
+	market_pos_z = 0.0
 	puzzle_flags.clear()
 	village_outlaw_strikes = 0
 	npc_village_bounds_valid = false
@@ -451,6 +502,12 @@ func get_persistent_state() -> Dictionary:
 		"van_turrets_installed": van_turrets_installed,
 		"van_destroyed": van_destroyed,
 		"dynamite_stock": dynamite_stock,
+		"horse_owned": horse_owned,
+		"horse_destroyed": horse_destroyed,
+		"market_pos_valid": market_pos_valid,
+		"market_pos_x": market_pos_x,
+		"market_pos_y": market_pos_y,
+		"market_pos_z": market_pos_z,
 		"puzzle_flags": puzzle_flags.duplicate(true),
 		"village_outlaw_strikes": village_outlaw_strikes,
 	}
@@ -479,6 +536,12 @@ func apply_persistent_state(d: Dictionary) -> void:
 	van_turrets_installed = bool(d.get("van_turrets_installed", false))
 	van_destroyed = bool(d.get("van_destroyed", false))
 	dynamite_stock = int(d.get("dynamite_stock", 0))
+	horse_owned = bool(d.get("horse_owned", false))
+	horse_destroyed = bool(d.get("horse_destroyed", false))
+	market_pos_valid = bool(d.get("market_pos_valid", false))
+	market_pos_x = float(d.get("market_pos_x", 0.0))
+	market_pos_y = float(d.get("market_pos_y", 0.0))
+	market_pos_z = float(d.get("market_pos_z", 0.0))
 	var pf = d.get("puzzle_flags", {})
 	puzzle_flags.clear()
 	if typeof(pf) == TYPE_DICTIONARY:

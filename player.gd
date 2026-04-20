@@ -272,6 +272,7 @@ var _character_kind: CharacterKind = CharacterKind.HERO
 var _character_visual_root: Node3D = null
 var _character_hat: Node3D = null
 var _personal_vehicle: Node3D = null
+var _world_map_market_btn: Button = null
 
 
 func _is_driving_van() -> bool:
@@ -885,6 +886,8 @@ func _setup_shop_ui() -> void:
 		"van_turrets",
 		"van_refuel",
 		"van_restore",
+		"horse_buy",
+		"horse_restore",
 	]:
 		var btn := Button.new()
 		btn.name = "Btn_" + key
@@ -982,7 +985,46 @@ func _refresh_shop_buttons() -> void:
 	_set_shop_btn_van_turrets()
 	_set_shop_btn_van_refuel()
 	_set_shop_btn_van_restore()
+	_set_shop_btn_horse_buy()
+	_set_shop_btn_horse_restore()
 	_set_shop_btn_dynamite()
+
+
+func _set_shop_btn_horse_buy() -> void:
+	var b := _shop_layer.find_child("Btn_horse_buy", true, false) as Button
+	if b == null:
+		return
+	var speed_txt := "скорость %.1f" % 16.5
+	if _character_kind != CharacterKind.COWBOY:
+		b.text = "Конь (ковбой): купить — %s   |   цена %d МАМА" % [speed_txt, GameProgress.COST_HORSE_BUY]
+		b.disabled = true
+		return
+	if GameProgress.horse_owned:
+		b.text = "Конь (ковбой): уже куплен — %s" % speed_txt
+		b.disabled = true
+		return
+	b.text = "Конь (ковбой): купить — %s, HP 20   |   цена %d МАМА" % [speed_txt, GameProgress.COST_HORSE_BUY]
+	b.disabled = GameProgress.mama_tokens < GameProgress.COST_HORSE_BUY
+
+
+func _set_shop_btn_horse_restore() -> void:
+	var b := _shop_layer.find_child("Btn_horse_restore", true, false) as Button
+	if b == null:
+		return
+	if _character_kind != CharacterKind.COWBOY:
+		b.text = "Конь (ковбой): восстановление (только для ковбоя)"
+		b.disabled = true
+		return
+	if not GameProgress.horse_owned:
+		b.text = "Конь (ковбой): нет коня — сначала покупка"
+		b.disabled = true
+		return
+	if not GameProgress.horse_destroyed:
+		b.text = "Конь (ковбой): на ходу (восстановление не нужно)"
+		b.disabled = true
+		return
+	b.text = "Конь (ковбой): восстановить после поломки   |   цена %d МАМА" % GameProgress.COST_HORSE_RESTORE
+	b.disabled = GameProgress.mama_tokens < GameProgress.COST_HORSE_RESTORE
 
 
 func _set_shop_btn_dynamite() -> void:
@@ -1080,6 +1122,14 @@ func _on_shop_buy_pressed(which: String) -> void:
 			ok = GameProgress.try_buy_van_refuel()
 		"van_restore":
 			ok = GameProgress.try_buy_van_restore()
+		"horse_buy":
+			ok = GameProgress.try_buy_horse()
+			if ok and _character_kind == CharacterKind.COWBOY:
+				_apply_character_profile()
+		"horse_restore":
+			ok = GameProgress.try_buy_horse_restore()
+			if ok and _character_kind == CharacterKind.COWBOY:
+				_apply_character_profile()
 		"dynamite":
 			ok = GameProgress.try_buy_dynamite()
 	if ok:
@@ -1153,6 +1203,22 @@ func _setup_world_map_ui() -> void:
 	strip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	strip.add_theme_color_override("font_color", Color(0.72, 0.82, 0.95, 0.98))
 	vbox.add_child(strip)
+	var bar := HBoxContainer.new()
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_theme_constant_override("separation", 10)
+	vbox.add_child(bar)
+	var btn_market := Button.new()
+	_world_map_market_btn = btn_market
+	btn_market.text = "Рынок"
+	btn_market.custom_minimum_size = Vector2(140, 34)
+	btn_market.pressed.connect(_teleport_to_market)
+	bar.add_child(btn_market)
+	var hint_market := Label.new()
+	hint_market.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_market.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint_market.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0, 0.9))
+	hint_market.text = "Кнопка телепортирует на площадь деревни с лавкой."
+	bar.add_child(hint_market)
 	var map_hint := Label.new()
 	map_hint.text = "Вид сверху: жёлтые подписи в мире — что где; колёсико меняет масштаб. Большой жёлтый квадрат — ты."
 	map_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1381,6 +1447,7 @@ func _toggle_world_map() -> void:
 		_refresh_world_map_content()
 		_world_map_start_3d_preview()
 		_update_world_map_player_marker()
+		_refresh_world_map_market_button()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_want_mouse_captured = false
 	else:
@@ -1390,6 +1457,29 @@ func _toggle_world_map() -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			_center_mouse_in_viewport()
 	_update_game_pause_from_ui()
+
+
+func _refresh_world_map_market_button() -> void:
+	if _world_map_market_btn == null:
+		return
+	_world_map_market_btn.disabled = not GameProgress.market_pos_valid
+	if not GameProgress.market_pos_valid:
+		_world_map_market_btn.text = "Рынок (не найден)"
+	else:
+		_world_map_market_btn.text = "Рынок"
+
+
+func _teleport_to_market() -> void:
+	if not GameProgress.market_pos_valid:
+		notify_quest_banner("Рынок не найден в мире.")
+		return
+	if _is_driving_van():
+		exit_van()
+	var p := GameProgress.get_market_pos()
+	# Чуть сдвигаем, чтобы не застрять в киоске.
+	global_position = p + Vector3(2.0, 0.55, 2.0)
+	velocity = Vector3.ZERO
+	notify_quest_banner("Телепорт на рынок.")
 
 
 func take_damage(amount: int, source: String = "") -> void:
@@ -3483,10 +3573,14 @@ func _apply_character_profile() -> void:
 			# Ковбой дружит с катаной/верёвкой как «лассо».
 			if _equipped == EquippedGun.CYBER_CANNON:
 				_equipped = EquippedGun.KATANA
-			_ensure_personal_vehicle(DRIVABLE_HORSE_SCENE)
-			notify_quest_banner("Персонаж: Ковбой (HP 120, лассо = верёвка ПКМ/ЛКМ)")
+			if GameProgress.horse_owned and not GameProgress.horse_destroyed:
+				_ensure_personal_vehicle(DRIVABLE_HORSE_SCENE)
+				notify_quest_banner("Персонаж: Ковбой (HP 120, конь куплен; лассо = верёвка ПКМ/ЛКМ)")
+			else:
+				_ensure_personal_vehicle(null)
+				notify_quest_banner("Персонаж: Ковбой (HP 120). Коня купи на рынке.")
 		CharacterKind.CYBER:
-			max_hp = 100
+			max_hp = 70
 			_apply_hat(false, Color.WHITE)
 			_equipped = EquippedGun.CYBER_CANNON
 			_ensure_personal_vehicle(DRIVABLE_FLYCAR_SCENE)

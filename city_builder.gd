@@ -418,6 +418,7 @@ func _build_village(spec: Dictionary) -> void:
 			add_child(shop)
 			shop.global_position = plaza
 			shop.rotation_degrees = Vector3(0.0, 20.0, 0.0)
+			GameProgress.register_market_pos(plaza)
 
 	var vid: int = spec["village_id"]
 	var mains: Array = spec["npc_mains"]
