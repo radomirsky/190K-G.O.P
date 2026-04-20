@@ -3457,11 +3457,13 @@ func _fire_cyber_cannon() -> void:
 	var w := scene.get_world_3d()
 	if w == null:
 		return
+	var space := w.direct_space_state
+	if space == null:
+		return
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
 	var to := from + dir * 160.0
-	var space := w.direct_space_state
 	var q := PhysicsRayQueryParameters3D.create(from, to)
 	q.collide_with_areas = true
 	q.collide_with_bodies = true
