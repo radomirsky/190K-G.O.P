@@ -198,6 +198,8 @@ func _snap_character_to_floor(want_pos: Vector3) -> Vector3:
 	if w == null:
 		return want_pos
 	var space := w.direct_space_state
+	if space == null:
+		return want_pos
 	var from := want_pos + Vector3.UP * 12.0
 	var to := want_pos + Vector3.DOWN * 55.0
 	var q := PhysicsRayQueryParameters3D.create(from, to)

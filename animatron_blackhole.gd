@@ -85,7 +85,12 @@ func _ray_collision_plant(col: Object) -> bool:
 
 
 func _try_move_and_plant_on_hit(from: Vector3, to: Vector3) -> bool:
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return false
+	var space := w.direct_space_state
+	if space == null:
+		return false
 	var seg := to - from
 	var seg_len := seg.length()
 	if seg_len < 1e-8:

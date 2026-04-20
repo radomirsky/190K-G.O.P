@@ -134,7 +134,12 @@ func _spawn_enemy() -> void:
 
 
 func _snap_to_floor(want_pos: Vector3) -> Vector3:
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return want_pos
+	var space := w.direct_space_state
+	if space == null:
+		return want_pos
 	var from := want_pos + Vector3.UP * snap_floor_ray_up
 	var to := want_pos + Vector3.DOWN * snap_floor_ray_down
 	var q := PhysicsRayQueryParameters3D.create(from, to)

@@ -2121,7 +2121,12 @@ func _try_grapple_attach() -> void:
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return
+	var space := w.direct_space_state
+	if space == null:
+		return
 	var to := from + dir * _eff_grapple_max_range()
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
@@ -3249,7 +3254,12 @@ func _katana_ray_damage(from: Vector3, direction: Vector3, reach: float) -> void
 	var dir := direction.normalized()
 	if dir.length_squared() < 1e-8:
 		return
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return
+	var space := w.direct_space_state
+	if space == null:
+		return
 	var to := from + dir * reach
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
@@ -3842,7 +3852,12 @@ func _update_aim_feedback() -> void:
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = ad[1]
 
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return
+	var space := w.direct_space_state
+	if space == null:
+		return
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir.normalized() * aim_ray_length)
 	q.exclude = [get_rid()]
 	var hit: Dictionary = space.intersect_ray(q)
@@ -3883,7 +3898,12 @@ func _raycast_aimed_throwable_passthrough(max_dist: float) -> RigidBody3D:
 	var ad := _aim_ray_from_dir()
 	var pos: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return null
+	var space := w.direct_space_state
+	if space == null:
+		return null
 	var excl: Array[RID] = [get_rid()]
 	if _held != null and is_instance_valid(_held):
 		excl.append(_held.get_rid())
@@ -4383,7 +4403,12 @@ func _raycast_aimed_throwable(max_dist: float) -> RigidBody3D:
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return null
+	var space := w.direct_space_state
+	if space == null:
+		return null
 	var to := from + dir * max_dist
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
@@ -4406,7 +4431,12 @@ func _raycast_aimed_enemy(max_dist: float) -> CharacterBody3D:
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return null
+	var space := w.direct_space_state
+	if space == null:
+		return null
 	var to := from + dir * max_dist
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
@@ -4437,7 +4467,12 @@ func _raycast_aimed_quest_npc(max_dist: float) -> Node:
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return null
+	var space := w.direct_space_state
+	if space == null:
+		return null
 	var to := from + dir * max_dist
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
@@ -4465,7 +4500,12 @@ func _raycast_aimed_village_house_loot(max_dist: float) -> Node:
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return null
+	var space := w.direct_space_state
+	if space == null:
+		return null
 	var to := from + dir * max_dist
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
@@ -4525,7 +4565,12 @@ func _raycast_aimed_puzzle_lever(max_dist: float) -> Node:
 	var ad := _aim_ray_from_dir()
 	var from: Vector3 = ad[0]
 	var dir: Vector3 = (ad[1] as Vector3).normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return null
+	var space := w.direct_space_state
+	if space == null:
+		return null
 	var to := from + dir * max_dist
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
@@ -4589,7 +4634,12 @@ func _humanoid_floor_anchor() -> Vector3:
 	else:
 		flat_fwd = flat_fwd.normalized()
 	var origin := global_position + flat_fwd * humanoid_spawn_forward + Vector3(0, 4.0, 0)
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return global_position + flat_fwd * humanoid_spawn_forward + Vector3(0, 0.5, 0.0)
+	var space := w.direct_space_state
+	if space == null:
+		return global_position + flat_fwd * humanoid_spawn_forward + Vector3(0, 0.5, 0.0)
 	var excl: Array[RID] = [get_rid()]
 	if _held:
 		excl.append(_held.get_rid())

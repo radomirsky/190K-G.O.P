@@ -66,7 +66,12 @@ func _aim_world_point_from_driver_camera(van: Node3D) -> Vector3:
 	var from := cam.global_position
 	var dir := -cam.global_transform.basis.z.normalized()
 	var to := from + dir * target_range
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return to
+	var space := w.direct_space_state
+	if space == null:
+		return to
 	var q := PhysicsRayQueryParameters3D.create(from, to)
 	q.collide_with_areas = true
 	q.collide_with_bodies = true
@@ -115,7 +120,12 @@ func _fire_minigun(van: Node3D, aim: Vector3) -> void:
 	if to.length_squared() < 0.001:
 		return
 	to = to.normalized()
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return
+	var space := w.direct_space_state
+	if space == null:
+		return
 	var q := PhysicsRayQueryParameters3D.create(muzzle + to * 0.12, muzzle + to * target_range)
 	q.collide_with_areas = true
 	q.collide_with_bodies = true

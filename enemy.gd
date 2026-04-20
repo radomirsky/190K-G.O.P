@@ -257,7 +257,12 @@ func _can_see_player() -> bool:
 		return false
 	if not vision_requires_line_of_sight:
 		return true
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return true
+	var space := w.direct_space_state
+	if space == null:
+		return true
 	var from := global_position + Vector3.UP * vision_ray_height
 	var to := _player.global_position + Vector3.UP * vision_ray_height
 	var q := PhysicsRayQueryParameters3D.create(from, to)
@@ -432,7 +437,12 @@ func _try_ranged_fire() -> void:
 	if d < ranged_preferred_min_dist * 0.65 or d > ranged_preferred_max_dist * 1.35:
 		return
 	# Имитируем выстрел лучом из центра врага по игроку.
-	var space := get_world_3d().direct_space_state
+	var w := get_world_3d()
+	if w == null:
+		return
+	var space := w.direct_space_state
+	if space == null:
+		return
 	var from := global_position + Vector3(0.0, 1.2, 0.0)
 	var to := _player.global_position + Vector3(0.0, 1.0, 0.0)
 	var q := PhysicsRayQueryParameters3D.create(from, to)
