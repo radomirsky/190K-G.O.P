@@ -191,7 +191,10 @@ func _snap_character_to_floor(want_pos: Vector3) -> Vector3:
 	var tree := get_tree()
 	if tree == null or tree.current_scene == null:
 		return want_pos
-	var space := tree.current_scene.get_world_3d().direct_space_state
+	var w := tree.current_scene.get_world_3d()
+	if w == null:
+		return want_pos
+	var space := w.direct_space_state
 	var from := want_pos + Vector3.UP * 12.0
 	var to := want_pos + Vector3.DOWN * 55.0
 	var q := PhysicsRayQueryParameters3D.create(from, to)
