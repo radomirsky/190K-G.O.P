@@ -191,7 +191,10 @@ func _snap_character_to_floor(want_pos: Vector3) -> Vector3:
 	var tree := get_tree()
 	if tree == null or tree.current_scene == null:
 		return want_pos
-	var w := tree.current_scene.get_world_3d()
+	var scene := tree.current_scene
+	if not is_instance_valid(scene):
+		return want_pos
+	var w := scene.get_world_3d()
 	if w == null:
 		return want_pos
 	var space := w.direct_space_state

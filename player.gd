@@ -3442,6 +3442,8 @@ func _fire_cyber_cannon() -> void:
 	if tree == null or tree.current_scene == null:
 		return
 	var scene := tree.current_scene
+	if not is_instance_valid(scene):
+		return
 	var w := scene.get_world_3d()
 	if w == null:
 		return
