@@ -3468,7 +3468,7 @@ func _fire_cyber_cannon() -> void:
 	q.collide_with_areas = true
 	q.collide_with_bodies = true
 	q.hit_from_inside = true
-	q.exclude = [self]
+	q.exclude = [get_rid()]
 	var hit := space.intersect_ray(q)
 	var p := to
 	if not hit.is_empty() and hit.has("position"):
