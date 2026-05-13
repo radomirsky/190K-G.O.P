@@ -1169,6 +1169,7 @@ func _toggle_shop() -> void:
 		_want_mouse_captured = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_center_mouse_in_viewport()
+	_update_game_pause_from_ui()
 
 
 func _setup_world_map_ui() -> void:
@@ -1982,7 +1983,7 @@ func _pause_controls_help_text() -> String:
 		+ "H — обрез; M — карта (колёсико — масштаб, жёлтый квадрат — ты; в креативе ЛКМ по виду — телепорт); Tab — магазин\n"
 		+ "6 — бросить динамит (лавка); в режиме «Креатив» — креативная палочка (ещё раз 6 — убрать)\n"
 		+ "B — вид камеры; Shift+B — «человек» из кубов\n"
-		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — поворот камеры\n"
+		+ "Shift+Z — стоп времени; Shift+X/Y — кубы; стрелки — движение; [ ] — персонаж\n"
 		+ "Esc — пауза\n"
 	)
 
@@ -2479,9 +2480,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:
-		# Переключение персонажа: стрелки влево/вправо.
+		# Переключение персонажа: [ / ] (стрелки оставлены для движения).
 		if (
-			(event.keycode == KEY_LEFT or event.physical_keycode == KEY_LEFT)
+			(
+				event.keycode == KEY_BRACKETLEFT
+				or event.physical_keycode == KEY_BRACKETLEFT
+			)
 			and _world_actions_input_ok()
 			and not _shop_open
 			and not _pause_visible
@@ -2492,7 +2496,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if (
-			(event.keycode == KEY_RIGHT or event.physical_keycode == KEY_RIGHT)
+			(
+				event.keycode == KEY_BRACKETRIGHT
+				or event.physical_keycode == KEY_BRACKETRIGHT
+			)
 			and _world_actions_input_ok()
 			and not _shop_open
 			and not _pause_visible
@@ -3673,12 +3680,6 @@ func _ensure_personal_vehicle(scene: PackedScene) -> void:
 
 
 func _apply_camera_look_smoothing(delta: float) -> void:
-	var lk := look_key_speed * delta
-	if Input.is_key_pressed(KEY_UP):
-		_look_pitch_target = _clamp_pitch_target(_look_pitch_target + lk)
-	if Input.is_key_pressed(KEY_DOWN):
-		_look_pitch_target = _clamp_pitch_target(_look_pitch_target - lk)
-
 	var smooth_k := 1.0
 	if look_smoothing > 0.0:
 		smooth_k = 1.0 - exp(-look_smoothing * delta)
@@ -3733,6 +3734,15 @@ func _physics_process(delta: float) -> void:
 		dir2.y -= 1.0
 	if Input.is_physical_key_pressed(KEY_S):
 		dir2.y += 1.0
+	# Стрелки — то же движение, что WASD (удобно без латинской раскладки).
+	if Input.is_physical_key_pressed(KEY_UP):
+		dir2.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_DOWN):
+		dir2.y += 1.0
+	if Input.is_physical_key_pressed(KEY_LEFT):
+		dir2.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_RIGHT):
+		dir2.x += 1.0
 
 	var direction := Vector3.ZERO
 	if dir2.length_squared() > 0.0:
